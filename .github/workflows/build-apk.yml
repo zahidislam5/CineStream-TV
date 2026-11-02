@@ -1,4 +1,4 @@
-name: Build CineStream TV Debug APK
+name: Build ZAHRUS TV Debug APK
 on:
   push:
     branches: [main]
@@ -48,7 +48,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: CineStreamTV-build-log
+          name: ZAHRUS-TV-build-log
           path: build.log
           if-no-files-found: warn
 
@@ -56,7 +56,7 @@ jobs:
         if: steps.compile.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: CineStreamTV-debug-APK
+          name: ZAHRUS-TV-debug-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -84,7 +84,7 @@ jobs:
             if test -f build.log; then tail -n 130 build.log | cut -c 1-240; else echo 'Build stopped before Gradle compilation; inspect the workflow run link.'; fi
             echo '~~~'
           } > /tmp/build-error.md
-          gh issue create --title "CineStream TV APK build error (run ${{ github.run_number }})" --body-file /tmp/build-error.md
+          gh issue create --title "ZAHRUS TV APK build error (run ${{ github.run_number }})" --body-file /tmp/build-error.md
 
       - name: Mark unsuccessful compilation
         if: steps.compile.outcome == 'failure'

@@ -37,7 +37,8 @@ object Sources {
 data class MediaEntry(
     val id:String,val title:String,val url:String,val category:String,val kind:String,
     val modified:String,val size:String,val poster:String?=null,
-    val season:Int?=null,val episode:Int?=null,val year:String?=null
+    val season:Int?=null,val episode:Int?=null,val year:String?=null,
+    val genre:String?=null,val quality:String?=null
 )
 data class FolderEntry(val name:String,val url:String,val modified:String,val size:String,val folder:Boolean)
 data class ScanResult(val items:List<MediaEntry>,val remaining:List<String>,val directories:Int,val errors:Int)
@@ -46,6 +47,8 @@ object CatalogScanner {
     private val hosts=setOf("172.16.50.7","172.16.50.10","172.16.50.12","172.16.50.14")
     private val videos=Regex("(?i)\\.(mkv|mp4|m4v|webm|avi|mov|ts)$")
     private val images=Regex("(?i)\\.(jpg|jpeg|png|webp)$")
+    private val nfos=Regex("(?i)\\.nfo$")
+    private val qualityPattern=Regex("(?i)(2160p|4k|1080p|720p|480p)")
     private val ep=Regex("(?i)S(\\d{1,2})[ ._-]*E(\\d{1,3})")
     private val epAlt=Regex("(?i)(?:episode|ep)[ ._-]*(\\d{1,3})")
     private val seasonPat=Regex("(?i)season[ ._-]*(\\d{1,3})")
@@ -72,7 +75,7 @@ object CatalogScanner {
     private fun fetch(url:String):String{
         val c=URL(url).openConnection() as HttpURLConnection
         c.connectTimeout=6000;c.readTimeout=9000;c.instanceFollowRedirects=false
-        c.setRequestProperty("User-Agent","CineStream-TV/0.4")
+        c.setRequestProperty("User-Agent","ZAHRUS-TV/0.5")
         return try{
             if(c.responseCode!=200)throw Exception("HTTP "+c.responseCode)
             if(c.contentLengthLong>4_000_000L)throw Exception("HTML too large")
@@ -83,6 +86,29 @@ object CatalogScanner {
             }
         }finally{c.disconnect()}
     }
+    private fun genreFromNfo(url:String):String?=try {
+        val connection=URL(url).openConnection() as HttpURLConnection
+        connection.connectTimeout=3500; connection.readTimeout=4500
+        connection.instanceFollowRedirects=false
+        try{
+            if(connection.responseCode!=200 || connection.contentLengthLong>100_000L) null
+            else {
+                val xml=connection.inputStream.use { inp ->
+                    val bytes=inp.readNBytes(100_001)
+                    if(bytes.size>100_000) "" else bytes.toString(Charsets.UTF_8)
+                }
+                if(xml.isBlank()) null else {
+                    val found=Jsoup.parse(xml,"",org.jsoup.parser.Parser.xmlParser())
+                        .select("genre").map{it.text().trim()}.filter{it.isNotEmpty()}
+                        .distinct().take(3)
+                    found.joinToString(" • ").ifBlank{null}
+                }
+            }
+        }finally{connection.disconnect()}
+    }catch (_:Exception){null}
+    private fun qualityOf(name:String,folders:List<String>):String?=
+        (listOf(name)+folders.asReversed()).firstNotNullOfOrNull{qualityPattern.find(it)?.value?.uppercase()}
+
     private fun id(s:String):String=MessageDigest.getInstance("SHA-256").digest(s.toByteArray())
        .take(12).joinToString(""){"%02x".format(it)}
     private fun path(url:String,root:String):List<String>{
@@ -120,6 +146,10 @@ object CatalogScanner {
             val poster=entries.firstOrNull{!it.folder&&images.containsMatchIn(it.name)&&
               (it.name.contains("poster",true)||it.name.contains("cover",true))}
               ?:entries.firstOrNull{!it.folder&&images.containsMatchIn(it.name)}
+            val nfo=entries.firstOrNull{!it.folder&&nfos.containsMatchIn(it.name)&&allowed(it.url,source.url)}
+            val genre=nfo?.let{genreFromNfo(it.url)} ?:
+                (if(source.label.contains("Animation",true)||source.label.contains("Anime",true)) "Animation"
+                 else if(source.label.contains("Documentar",true)) "Documentary" else null)
             entries.filter{it.folder&&!excluded.containsMatchIn(it.name)&&allowed(it.url,source.url)}
                 .sortedBy{it.modified}.forEach{queue.addLast(it.url)}
             for(entry in entries){
@@ -131,33 +161,40 @@ object CatalogScanner {
                   ?:epAlt.find(entry.name)?.groupValues?.get(1)?.toIntOrNull()
                 val name=title(folders,entry.name,source.kind)
                 output.add(MediaEntry(id(entry.url),name,entry.url,source.label,source.kind,
-                    entry.modified,entry.size,poster?.url,season,episode,year.find(name)?.value))
+                    entry.modified,entry.size,poster?.url,season,episode,year.find(name)?.value,
+                    genre,qualityOf(entry.name,folders)))
             }
         }
         ScanResult(output.distinctBy{it.id},queue.toList(),pages,errors)
     }
 }
-class CatalogDatabase(ctx:Context):SQLiteOpenHelper(ctx,"cinestream.db",null,1){
+class CatalogDatabase(ctx:Context):SQLiteOpenHelper(ctx,"cinestream.db",null,2){
     override fun onCreate(db:SQLiteDatabase){
-        db.execSQL("CREATE TABLE IF NOT EXISTS videos(id TEXT PRIMARY KEY,title TEXT,url TEXT,category TEXT,kind TEXT,modified TEXT,size TEXT,poster TEXT,season INTEGER,episode INTEGER,year TEXT)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS videos(id TEXT PRIMARY KEY,title TEXT,url TEXT,category TEXT,kind TEXT,modified TEXT,size TEXT,poster TEXT,season INTEGER,episode INTEGER,year TEXT,genre TEXT,quality TEXT)")
         db.execSQL("CREATE INDEX IF NOT EXISTS ix_videos_modified ON videos(modified)")
     }
-    override fun onUpgrade(db:SQLiteDatabase,oldVersion:Int,newVersion:Int){}
+    override fun onUpgrade(db:SQLiteDatabase,oldVersion:Int,newVersion:Int){
+        if(oldVersion<2){
+            db.execSQL("ALTER TABLE videos ADD COLUMN genre TEXT")
+            db.execSQL("ALTER TABLE videos ADD COLUMN quality TEXT")
+        }
+    }
+    fun clear(){writableDatabase.delete("videos",null,null)}
     fun load():List<MediaEntry>{
         val out=mutableListOf<MediaEntry>()
-        readableDatabase.rawQuery("SELECT id,title,url,category,kind,modified,size,poster,season,episode,year FROM videos ORDER BY modified DESC",null).use{c->
+        readableDatabase.rawQuery("SELECT id,title,url,category,kind,modified,size,poster,season,episode,year,genre,quality FROM videos ORDER BY modified DESC",null).use{c->
             while(c.moveToNext())out.add(MediaEntry(
                 c.getString(0),c.getString(1),c.getString(2),c.getString(3),c.getString(4),
                 c.getString(5)?:"",c.getString(6)?:"",c.getString(7),
                 if(c.isNull(8))null else c.getInt(8),
-                if(c.isNull(9))null else c.getInt(9),c.getString(10)))
+                if(c.isNull(9))null else c.getInt(9),c.getString(10),c.getString(11),c.getString(12)))
         }
         return out
     }
     fun save(items:List<MediaEntry>){
         val db=writableDatabase;db.beginTransaction()
         try{
-            val query="INSERT OR REPLACE INTO videos(id,title,url,category,kind,modified,size,poster,season,episode,year) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
+            val query="INSERT OR REPLACE INTO videos(id,title,url,category,kind,modified,size,poster,season,episode,year,genre,quality) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
             val statement=db.compileStatement(query)
             try{for(v in items){
                 statement.clearBindings()
@@ -166,6 +203,8 @@ class CatalogDatabase(ctx:Context):SQLiteOpenHelper(ctx,"cinestream.db",null,1){
                 if(v.season==null)statement.bindNull(9) else statement.bindLong(9,v.season.toLong())
                 if(v.episode==null)statement.bindNull(10) else statement.bindLong(10,v.episode.toLong())
                 if(v.year==null)statement.bindNull(11) else statement.bindString(11,v.year)
+                if(v.genre==null)statement.bindNull(12) else statement.bindString(12,v.genre)
+                if(v.quality==null)statement.bindNull(13) else statement.bindString(13,v.quality)
                 statement.executeInsert()
             }}finally{statement.close()}
             db.setTransactionSuccessful()
