@@ -121,21 +121,13 @@ jobs:
           arch: x86_64
           profile: pixel_2
           disable-animations: true
-          script: |
-            adb install downloaded-apk/app-debug.apk
-            adb logcat -c
-            adb shell am start -n com.cinestream.tv/.MainActivity
-            sleep 14
-            adb logcat -d -v brief -s AndroidRuntime:E | tee runtime-crashes.txt
-            if grep -E "FATAL EXCEPTION|Process: com.cinestream.tv" runtime-crashes.txt; then
-              echo "Android runtime crash detected"
-              exit 1
-            fi
-            adb shell pidof com.cinestream.tv
+          script: bash .github/scripts/android-startup-smoke.sh
       - name: Upload runtime crash log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ZAHRUS-TV-emulator-runtime-log
-          path: runtime-crashes.txt
+          path: |
+            runtime-crashes.txt
+            startup-screen.png
           if-no-files-found: warn
