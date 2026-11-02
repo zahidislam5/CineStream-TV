@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CineStream TV</title>
+<style>
+:root{font-family:Arial,Helvetica,sans-serif;background:#090b13;color:#f7f8fb;font-size:20px}
+*{box-sizing:border-box}body{margin:0}button,input{font:inherit}
+header{display:flex;align-items:center;gap:14px;background:#111520;padding:21px 3.5%;position:sticky;top:0;z-index:5}
+.brand{color:#ff536a;font-size:27px;font-weight:bold;white-space:nowrap;margin-right:25px}
+nav{display:flex;gap:9px}button{border:0;border-radius:9px;padding:12px 16px;background:#252b39;color:#fff;cursor:pointer}
+button.selected,.primary{background:#da3953}button:focus,input:focus{outline:4px solid #fff;outline-offset:4px;transform:scale(1.045);position:relative;z-index:2}
+input{background:#181f2b;border:2px solid #353d4c;border-radius:9px;color:#fff;padding:11px;width:230px;min-width:0}
+#scan{margin-left:auto}#status{background:#10131e;color:#b6bfcd;padding:10px 4%;font-size:14px;min-height:37px}
+main{padding:24px 4% 80px}.hero{background:linear-gradient(112deg,#312338,#151f35 55%,#24273c);padding:35px 40px;border-radius:16px;margin:6px 0 26px}
+.hero h1{font-size:42px;margin:0 0 10px}.hero p{font-size:18px;color:#b9c2d4;margin:0;line-height:1.5}
+h2{font-size:26px;margin:36px 0 16px}small,.meta{font-size:15px;color:#a9b2c6}
+.grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:17px}
+.card{white-space:normal;text-align:left;padding:0;overflow:hidden;background:#1d2232;border:1px solid #33394d;border-radius:12px;min-height:240px}
+.card .cover{height:150px;background:linear-gradient(135deg,#3b4c65,#283147 55%,#462638);display:flex;align-items:center;justify-content:center;font-size:40px;color:#c7d3e9}
+.card .info{padding:12px}.card strong{display:block;font-size:17px;line-height:1.35;min-height:44px;overflow-wrap:anywhere}.card .meta{margin-top:10px;display:block}
+.empty{background:#171b2b;padding:30px;border-radius:12px;color:#abb4c8;line-height:1.5}
+#pages{display:flex;gap:18px;align-items:center;margin-top:26px}
+#detail{display:none;position:fixed;z-index:20;inset:0;overflow:auto;background:#090b13;padding:6vh 8vw}
+#detail.open{display:block}#detail h1{font-size:43px;margin:26px 0 12px;max-width:1000px}
+#detail p{color:#bac5d9}#detail .actions{display:flex;gap:14px;margin:26px 0 34px}
+.episode{display:flex;justify-content:space-between;align-items:center;border:1px solid #30394c;background:#191e2b;border-radius:10px;padding:10px 15px;margin:10px 0;gap:15px}
+@media(max-width:1100px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}header{flex-wrap:wrap}#scan{margin-left:0}}
+@media(min-width:1900px){.grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
+</style></head>
+<body>
+<header><div class="brand">▶ CineStream TV</div><nav>
+<button data-tab="Home" class="selected">Home</button><button data-tab="Movies">Movies</button>
+<button data-tab="Series">Series</button><button data-tab="Latest">Latest</button><button data-tab="Favorites">Favorites</button>
+</nav><input id="search" placeholder="Search titles" aria-label="Search titles"><button id="scan" class="primary">↻ Scan</button></header>
+<div id="status">Connect your Google TV to the ISP network. Only Movies and Web Series are indexed.</div>
+<main><div class="hero"><h1>Movies and Series. One screen.</h1>
+<p>Browse your ISP library using the TV remote. Catalog refreshes every 6 hours while the app is open.<br>No Games. No Software. No external PC required.</p></div>
+<div id="content"></div><div id="pages"></div></main>
+<div id="detail"><button id="back">← Back</button><h1 id="title"></h1><p id="info"></p>
+<div class="actions"><button id="play" class="primary">▶ Play</button><button id="favorite">♡ Favorite</button><button id="external">External Player</button></div>
+<h2 id="episodeHeading" style="display:none">Episodes</h2><div id="episodes"></div></div>
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const state={catalog:[],tab:'Home',query:'',offset:0,limit:80,detail:null};
+  let lastCard=null;
+  function nativeCall(method,...args){
+    if(window.NativeTV && typeof window.NativeTV[method]==='function')window.NativeTV[method](...args);
+    else $('status').textContent='Open the Android TV APK to use native scanner and player.';
+  }
+  window.fromNative=(type,payload)=>{
+    if(type==='catalog'){try{state.catalog=JSON.parse(payload);draw()}catch(e){$('status').textContent='Catalog could not be decoded.'}}
+    else if(type==='status'||type==='complete')$('status').textContent=payload;
+  };
+  function normalized(s){return String(s||'').toLowerCase()}
+  function filtered(){
+    let rows=state.catalog.filter(x=>!state.query||[x.title,x.category,x.year,x.kind].some(s=>normalized(s).includes(normalized(state.query))));
+    if(state.tab==='Movies')rows=rows.filter(x=>x.kind==='Movie');
+    if(state.tab==='Series')rows=rows.filter(x=>x.kind==='Series');
+    if(state.tab==='Favorites')rows=rows.filter(x=>x.favorite);
+    rows.sort((a,b)=>String(b.modified||'').localeCompare(String(a.modified||'')));
+    const map=new Map();
+    rows.forEach(x=>{const key=x.kind+':'+x.title+':'+x.category;if(!map.has(key))map.set(key,x)});
+    return [...map.values()];
+  }
+  function elem(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e}
+  function card(item){
+    const b=elem('button','card');b.dataset.id=item.id;
+    b.append(elem('div','cover',item.kind==='Series'?'▣':'▶'));
+    const info=elem('div','info');info.append(elem('strong','',item.title));
+    info.append(elem('span','meta',item.kind+' · '+(item.year||item.category)+(item.favorite?' · ♥':'')));
+    b.append(info);b.onclick=()=>details(item);return b
+  }
+  function section(name,rows,max){
+    const s=elem('section');const h=elem('h2','',name+'  ('+rows.length+')');s.append(h);
+    const g=elem('div','grid');rows.slice(0,max).forEach(item=>g.append(card(item)));s.append(g);return s
+  }
+  function draw(){
+    const focused=document.activeElement?.dataset?.id;
+    document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('selected',b.dataset.tab===state.tab));
+    $('content').replaceChildren();$('pages').replaceChildren();
+    const all=filtered();
+    if(state.tab==='Home'&&!state.query){
+      const groups=[
+        ['Recently Added',all],
+        ['TV / Web Series',all.filter(x=>x.kind==='Series')],
+        ['English Movies',all.filter(x=>normalized(x.category).includes('english'))],
+        ['Hindi Movies',all.filter(x=>normalized(x.category).includes('hindi'))],
+        ['Bangla Movies',all.filter(x=>normalized(x.category).includes('bangla'))],
+        ['South Indian',all.filter(x=>normalized(x.category).includes('south'))],
+        ['Animation',all.filter(x=>normalized(x.category).includes('animation'))]
+      ];
+      groups.filter(x=>x[1].length>0).forEach(x=>$('content').append(section(x[0],x[1],18)));
+    }else{
+      $('content').append(section(state.query?'Search results':state.tab,all.slice(state.offset,state.offset+state.limit),state.limit));
+      if(all.length>state.limit){
+        const prev=elem('button','','← Previous'),next=elem('button','','Next →');
+        prev.disabled=state.offset===0;next.disabled=state.offset+state.limit>=all.length;
+        prev.onclick=()=>{state.offset=Math.max(0,state.offset-state.limit);draw()};
+        next.onclick=()=>{state.offset+=state.limit;draw()};
+        $('pages').append(prev,elem('span','',String(state.offset+1)+'–'+String(Math.min(all.length,state.offset+state.limit))+' of '+all.length),next)
+      }
+    }
+    if(!all.length)$('content').append(elem('div','empty','No matching videos in the cached catalog. Connect to ISP Wi-Fi and press Scan.'));
+    if(focused){const b=[...document.querySelectorAll('.card')].find(x=>x.dataset.id===focused);if(b)b.focus({preventScroll:true})}
+  }
+  function details(x){
+    state.detail=x;lastCard=document.activeElement;
+    const related=state.catalog.filter(y=>y.kind==='Series'&&y.title===x.title&&y.category===x.category)
+       .sort((a,b)=>(a.season||0)-(b.season||0)||(a.episode||0)-(b.episode||0));
+    $('title').textContent=x.title;
+    $('info').textContent=[x.category,x.kind,x.year,x.size,x.modified?'Modified: '+x.modified:''].filter(Boolean).join(' · ');
+    const first=related[0]||x;
+    $('play').onclick=()=>nativeCall('play',first.id);
+    $('external').onclick=()=>nativeCall('external',first.id);
+    $('favorite').textContent=x.favorite?'♥ Remove Favorite':'♡ Add Favorite';
+    $('favorite').onclick=()=>{nativeCall('favorite',x.id,!x.favorite);x.favorite=!x.favorite;$('favorite').textContent=x.favorite?'♥ Remove Favorite':'♡ Add Favorite'};
+    $('episodes').replaceChildren();$('episodeHeading').style.display=x.kind==='Series'?'block':'none';
+    if(x.kind==='Series')related.slice(0,200).forEach(y=>{
+      const line=elem('div','episode');
+      line.append(elem('span','', 'Season '+(y.season||'?')+' · Episode '+(y.episode||'?')+' · '+y.size));
+      const p=elem('button','','▶ Play');p.onclick=()=>nativeCall('play',y.id);line.append(p);$('episodes').append(line)
+    });
+    $('detail').classList.add('open');$('back').focus();
+  }
+  function back(){
+    if($('detail').classList.contains('open')){
+      $('detail').classList.remove('open');if(lastCard)lastCard.focus();state.detail=null;return;
+    }
+    state.tab='Home';state.offset=0;state.query='';$('search').value='';draw();document.querySelector('[data-tab="Home"]').focus()
+  }
+  window.tvBack=back;
+  document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;state.offset=0;draw()});
+  $('search').oninput=e=>{state.query=e.target.value;state.offset=0;draw()};
+  $('scan').onclick=()=>nativeCall('refresh');$('back').onclick=back;
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'||(e.key==='Backspace'&&document.activeElement.tagName!=='INPUT')){e.preventDefault();back();return}
+    if(!['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.key))return;
+    const sel=$('detail').classList.contains('open')?'#detail button:not(:disabled)':'header button:not(:disabled), header input, main button:not(:disabled)';
+    const nodes=[...document.querySelectorAll(sel)].filter(n=>n.getClientRects().length>0);
+    const current=document.activeElement;if(!current||!nodes.includes(current))return;
+    const r=current.getBoundingClientRect();const x=r.x+r.width/2,y=r.y+r.height/2;
+    const horizontal=e.key==='ArrowRight'||e.key==='ArrowLeft';
+    const candidates=nodes.filter(n=>n!==current).map(n=>{
+      const b=n.getBoundingClientRect();const dx=b.x+b.width/2-x,dy=b.y+b.height/2-y;
+      const axis=e.key==='ArrowRight'?dx:e.key==='ArrowLeft'?-dx:e.key==='ArrowDown'?dy:-dy;
+      const across=horizontal?Math.abs(dy):Math.abs(dx);
+      return {n,axis,score:axis+2.8*across};
+    }).filter(v=>v.axis>6).sort((a,b)=>a.score-b.score);
+    if(candidates[0]){e.preventDefault();candidates[0].n.focus();candidates[0].n.scrollIntoView({block:'nearest',inline:'nearest'})}
+  });
+  draw();setTimeout(()=>nativeCall('ready'),400);
+})();
+</script></body></html>
