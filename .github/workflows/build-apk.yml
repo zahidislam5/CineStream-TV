@@ -47,8 +47,16 @@ jobs:
           path: build.log
           if-no-files-found: warn
 
-      - name: Post build errors to a diagnostic issue
-        if: steps.compile.outcome == 'failure'
+      - name: Upload APK
+        if: steps.compile.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CineStreamTV-debug-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Report build failure
+        if: failure() || steps.compile.outcome == 'failure'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -57,21 +65,13 @@ jobs:
           {
             echo "Android APK build failed. Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             echo
-            echo 'The tail of the Gradle build log:'
+            echo 'Last Gradle log lines (if compilation started):'
             echo '~~~'
-            tail -n 130 build.log | cut -c 1-240
+            if test -f build.log; then tail -n 130 build.log | cut -c 1-240; else echo 'Build stopped before Gradle compilation; inspect the workflow run link.'; fi
             echo '~~~'
           } > /tmp/build-error.md
           gh issue create --title "CineStream TV APK build error (run ${{ github.run_number }})" --body-file /tmp/build-error.md
 
-      - name: Fail job if compilation failed
+      - name: Mark unsuccessful compilation
         if: steps.compile.outcome == 'failure'
         run: exit 1
-
-      - name: Upload APK
-        if: steps.compile.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: CineStreamTV-debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
