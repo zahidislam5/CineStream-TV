@@ -47,6 +47,7 @@ class MainActivity:Activity(){
     private lateinit var web:WebView
     private lateinit var db:CatalogDatabase
     private val items=linkedMapOf<String,MediaEntry>()
+    private val posterProxy by lazy{PosterProxy(this)}
     private var catalogLoaded=false
     private var playerHolder:FrameLayout?=null
     private var player:ExoPlayer?=null
@@ -76,7 +77,17 @@ class MainActivity:Activity(){
             webChromeClient=WebChromeClient()
             webViewClient=object:WebViewClientCompat(){
                 override fun shouldInterceptRequest(view:WebView,request:WebResourceRequest):WebResourceResponse?{
-                    return loader.shouldInterceptRequest(request.url)
+                    val target=request.url
+                    if(target.scheme=="http"){
+                        val url=target.toString()
+                        if(Sources.defaults.any{CatalogScanner.allowed(url,it.url)}){
+                            return posterProxy.fetch(url) ?: WebResourceResponse("image/jpeg",null,
+                                java.io.ByteArrayInputStream(ByteArray(0)))
+                        }
+                        return WebResourceResponse("text/plain","UTF-8",
+                            java.io.ByteArrayInputStream(ByteArray(0)))
+                    }
+                    return loader.shouldInterceptRequest(target)
                 }
                 override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest):Boolean{
                     return !(request.url.scheme=="https"&&request.url.host=="appassets.androidplatform.net" &&
