@@ -137,8 +137,8 @@ class MainActivity:Activity(){
         if(!Regex("[a-f0-9]{24}").matches(id))return null
         val url=posters[id]?:return null
         if(!posterAllowed(url))return null
-        val cacheDir=File(cacheDir,"zahrus-posters");cacheDir.mkdirs()
-        val imageFile=File(cacheDir,id+".img")
+        val posterDirectory=File(cacheDir,"zahrus-posters");posterDirectory.mkdirs()
+        val imageFile=File(posterDirectory,id+".img")
         val bytes=try{
             if(imageFile.exists()&&imageFile.length() in 1..3_000_000)imageFile.readBytes()
             else{
@@ -233,8 +233,15 @@ class MainActivity:Activity(){
                 val key=source.label.replace(Regex("[^A-Za-z0-9]"),"_")
                 try{
                     val result=CatalogScanner.scan(source,pending(key),24)
-                    result.items.forEach{items[it.id]=it;it.poster?.let{poster->posters[it.id]=poster}}
-                    withContext(Dispatchers.IO){db.save(result.items)}
+                    result.items.forEach{newItem->
+                        val savedPoster=newItem.poster ?: items.values.firstOrNull { old ->
+                            old.title==newItem.title && old.category==newItem.category && old.poster!=null
+                        }?.poster
+                        val item=if(savedPoster!=newItem.poster)newItem.copy(poster=savedPoster) else newItem
+                        items[item.id]=item
+                        item.poster?.let{poster->posters[item.id]=poster}
+                    }
+                    withContext(Dispatchers.IO){db.save(result.items.map{items[it.id]?:it})}
                     discovered+=result.items.size
                     if(result.directories>0)reached++
                     prefs.edit().putString("queue_"+key,JSONArray(result.remaining).toString()).apply()
