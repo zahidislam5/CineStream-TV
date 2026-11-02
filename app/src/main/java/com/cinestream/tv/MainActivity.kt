@@ -127,7 +127,7 @@ class MainActivity:Activity(){
             }catch (_:Exception){Toast.makeText(this@MainActivity,"No external video player installed",Toast.LENGTH_LONG).show()}
         }
     }
-    private fun pending(key:String):List<String>=try{
+    private fun pending(key:String):List<String> = try {
         val a=JSONArray(prefs.getString("queue_"+key,"[]"))
         (0 until a.length()).map{a.getString(it)}
     }catch (_:Exception){emptyList()}
