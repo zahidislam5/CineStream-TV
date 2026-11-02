@@ -7,29 +7,18 @@ import android.os.Looper
 import android.content.Intent
 import android.net.Uri
 import android.view.View
-import android.view.Gravity
-import android.graphics.Color
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.util.Log
+import android.webkit.WebSettings
 import android.webkit.RenderProcessGoneDetail
-import java.io.ByteArrayOutputStream
-import java.util.concurrent.Semaphore
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
-import android.widget.Button
+import android.util.Log
+import android.graphics.Color
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.webkit.WebResourceResponse
-import androidx.media3.ui.AspectRatioFrameLayout
-import java.io.ByteArrayInputStream
-import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.concurrent.ConcurrentHashMap
+import android.widget.Button
+import android.view.Gravity
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.widget.FrameLayout
 import android.widget.Toast
@@ -52,50 +41,34 @@ import org.json.JSONObject
 class MainActivity:Activity(){
     private val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main)
     private val handler=Handler(Looper.getMainLooper())
-    private val defaultInterval=6L*60*60*1000
+    private val interval=6L*60*60*1000
     private val prefs by lazy{getSharedPreferences("cs_prefs",MODE_PRIVATE)}
     private lateinit var root:FrameLayout
     private lateinit var web:WebView
     private lateinit var db:CatalogDatabase
     private val items=linkedMapOf<String,MediaEntry>()
-    private fun refreshMillis():Long=when(prefs.getString("opt_refresh","6 hours")){
-        "Off"->0L;"1 hour"->3600000L;"3 hours"->10800000L;"12 hours"->43200000L;"24 hours"->86400000L
-        else->21600000L
-    }
+    private var catalogLoaded=false
+    private var playerHolder:FrameLayout?=null
     private var player:ExoPlayer?=null
     private var playerView:PlayerView?=null
-    private var playerContainer:FrameLayout?=null
-    private var fullscreen=true
-    private var scaleMode="Fit"
-    private val posters=ConcurrentHashMap<String,String>()
-    private val posterSlots=Semaphore(3)
-    private var startupWarning:String?=null
     private var playingId:String?=null
     private var scanning=false
     private var pageReady=false
     private val intervalRunner=object:Runnable{
         override fun run(){
-            val delay=refreshMillis()
-            if(delay>0&&!scanning&&System.currentTimeMillis()-prefs.getLong("sync",0L)>=delay)startScan()
-            handler.postDelayed(this,60000L)
+            // Manual scan only; do not start expensive network activity on launch.
+            handler.postDelayed(this,interval)
         }
     }
     override fun onCreate(savedInstanceState:Bundle?){
         super.onCreate(savedInstanceState)
-        try {
-        db=CatalogDatabase(this)
-        try {
-            db.load().forEach{items[it.id]=it;it.poster?.let{poster->posters[it.id]=poster}}
-        }catch(e:Exception){
-            Log.e("ZAHRUS-TV","Could not load old catalog. Data is preserved for recovery.",e)
-            startupWarning="The saved catalog could not be loaded. Your app data was not deleted."
-        }
         root=FrameLayout(this)
+        setContentView(root)
         val loader=WebViewAssetLoader.Builder()
-            .addPathHandler("/assets/",WebViewAssetLoader.AssetsPathHandler(this))
-            .addPathHandler("/poster/",WebViewAssetLoader.PathHandler { path -> loadPoster(path) }).build()
+            .addPathHandler("/assets/",WebViewAssetLoader.AssetsPathHandler(this)).build()
         web=WebView(this).apply{
             settings.javaScriptEnabled=true
+            settings.mixedContentMode=WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             settings.domStorageEnabled=true
             settings.allowFileAccess=false
             settings.allowContentAccess=false
@@ -110,17 +83,29 @@ class MainActivity:Activity(){
                         request.url.path?.startsWith("/assets/")==true)
                 }
                 override fun onRenderProcessGone(view:WebView,detail:RenderProcessGoneDetail):Boolean{
-                    Log.e("ZAHRUS-TV","WebView renderer stopped. didCrash="+detail.didCrash())
-                    showRecoveryScreen("The TV's WebView renderer stopped unexpectedly. Try Retry or clear Android System WebView cache in TV Settings.")
+                    Log.e("ZAHRUS-TV","WebView renderer exited unexpectedly")
+                    showRecovery("Android WebView stopped. Please update Android System WebView.")
                     return true
                 }
                 override fun onPageFinished(view:WebView,url:String){
                     if(url.startsWith("https://appassets.androidplatform.net/assets/")){
-                        pageReady=true;send("settings",settingsJSON());send("catalog",catalogJSON())
-                        send("status","Cached "+items.size+" files. Scans every 6 hours while app is open.")
-                        val delay=refreshMillis()
-                        if(startupWarning!=null)send("status",startupWarning!!)
-                        else if(delay>0&&(items.isEmpty()||System.currentTimeMillis()-prefs.getLong("sync",0L)>=delay))startScan()
+                        pageReady=true
+                        send("status","Loading saved videos...")
+                        scope.launch{
+                            try{
+                                val saved=withContext(Dispatchers.IO){
+                                    db=CatalogDatabase(this@MainActivity)
+                                    db.load()
+                                }
+                                saved.forEach{items[it.id]=it}
+                                catalogLoaded=true
+                                send("catalog",catalogJSON())
+                                send("status","Loaded "+items.size+" files. Use Scan to check the ISP server.")
+                            }catch(e:Exception){
+                                Log.e("ZAHRUS-TV","Database loading failed",e)
+                                send("status","Saved catalog could not be opened. No data was deleted.")
+                            }
+                        }
                     }
                 }
             }
@@ -131,38 +116,16 @@ class MainActivity:Activity(){
         }
         root.addView(web,FrameLayout.LayoutParams(-1,-1))
         setContentView(root)
-        } catch(e:Exception) {
-            Log.e("ZAHRUS-TV","Startup failure",e)
-            showRecoveryScreen("Startup error: "+(e.message?:"Unknown error"))
-        }
     }
-    private fun showRecoveryScreen(message:String){
+    private fun showRecovery(message:String){
         runOnUiThread{
             if(!::root.isInitialized)root=FrameLayout(this)
             root.removeAllViews()
-            val panel=LinearLayout(this).apply{
-                orientation=LinearLayout.VERTICAL
-                setPadding(45,45,45,45)
-                setBackgroundColor(Color.rgb(13,16,29))
-            }
-            val title=TextView(this).apply{
-                text="ZAHRUS TV · Recovery"
-                textSize=28f;setTextColor(Color.WHITE)
-                setTypeface(null,Typeface.BOLD)
-            }
-            val description=TextView(this).apply{
-                text=message+"\nYour saved movies and favorites have not been automatically deleted. Please share a screenshot of this message."
-                textSize=17f;setTextColor(Color.LTGRAY);setPadding(0,28,0,28)
-            }
-            val retry=Button(this).apply{
-                text="Retry opening ZAHRUS TV"
-                setOnClickListener{recreate()}
-            }
-            panel.addView(title)
-            panel.addView(description)
-            panel.addView(retry)
-            root.addView(panel,FrameLayout.LayoutParams(-1,-1))
-            setContentView(root)
+            val layout=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(42,42,42,42);setBackgroundColor(Color.rgb(15,17,28))}
+            layout.addView(TextView(this).apply{text="ZAHRUS TV · Recovery";textSize=27f;setTextColor(Color.WHITE)})
+            layout.addView(TextView(this).apply{text=message+"\nExisting data is preserved.";textSize=18f;setTextColor(Color.LTGRAY)})
+            layout.addView(Button(this).apply{text="Retry";setOnClickListener{recreate()}})
+            root.addView(layout,FrameLayout.LayoutParams(-1,-1));setContentView(root)
         }
     }
     private fun send(type:String,value:String){
@@ -173,69 +136,15 @@ class MainActivity:Activity(){
             }
         }
     }
-    private fun settingsJSON():String=JSONObject().apply{
-        listOf("refresh","cardSize","showPosters","showGenre","showYear","playerMode","resume","defaultTab").forEach{key->
-            val defaults=mapOf("refresh" to "6 hours","cardSize" to "Medium","showPosters" to "true",
-                "showGenre" to "true","showYear" to "true","playerMode" to "Fit","resume" to "true","defaultTab" to "Home")
-            put(key,prefs.getString("opt_"+key,defaults[key]))
-        }
-        val sources=JSONObject()
-        Sources.defaults.forEach{source->sources.put(source.label,prefs.getBoolean("source_"+source.label,true))}
-        put("sources",sources);put("lastSync",prefs.getLong("sync",0L));put("count",items.size)
-    }.toString()
-    private fun posterAllowed(url:String):Boolean = Sources.defaults.any{CatalogScanner.allowed(url,it.url)}&&
-       Regex("(?i)\\.(jpg|jpeg|png|webp)$").containsMatchIn(url)
-    private fun normalizePoster(data:ByteArray):ByteArray?{
-        // Never hand a full-size, multi-megapixel still to low-memory TV WebView.
-        val opts=BitmapFactory.Options().apply{inJustDecodeBounds=true}
-        BitmapFactory.decodeByteArray(data,0,data.size,opts)
-        if(opts.outWidth<=0||opts.outHeight<=0)return null
-        var sample=1
-        while(opts.outWidth/sample>640||opts.outHeight/sample>960)sample*=2
-        val decoding=BitmapFactory.Options().apply{inSampleSize=sample;inPreferredConfig=Bitmap.Config.RGB_565}
-        val bitmap=BitmapFactory.decodeByteArray(data,0,data.size,decoding)?:return null
-        return try{
-            val out=ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG,78,out)
-            out.toByteArray().takeIf{it.isNotEmpty()&&it.size<600_000}
-        }finally{bitmap.recycle()}
-    }
-    private fun loadPoster(name:String):WebResourceResponse?{
-        val id=name.substringBefore("?").substringBefore("/")
-        if(!Regex("[a-f0-9]{24}").matches(id))return null
-        val url=posters[id]?:return null
-        if(!posterAllowed(url))return null
-        if(!posterSlots.tryAcquire())return null
-        return try {
-            val posterDirectory=File(cacheDir,"zahrus-posters").apply{mkdirs()}
-            val imageFile=File(posterDirectory,id+".small.jpg")
-            val bytes=if(imageFile.exists()&&imageFile.length() in 1..600_000)imageFile.readBytes()
-            else {
-                val conn=URL(url).openConnection() as HttpURLConnection
-                conn.connectTimeout=3500;conn.readTimeout=5000;conn.instanceFollowRedirects=false
-                val raw=try{
-                    if(conn.responseCode!=200||conn.contentLengthLong>2_500_000L)return null
-                    conn.inputStream.use{it.readNBytes(2_500_001)}
-                }finally{conn.disconnect()}
-                if(raw.isEmpty()||raw.size>2_500_000)return null
-                val scaled=normalizePoster(raw)?:return null
-                imageFile.writeBytes(scaled)
-                scaled
-            }
-            WebResourceResponse("image/jpeg",null,ByteArrayInputStream(bytes))
-        }catch(e:Exception){
-            Log.w("ZAHRUS-TV","Poster request failed",e)
-            null
-        }finally{posterSlots.release()}
-    }
     private fun catalogJSON():String{
         val a=JSONArray()
-        items.values.sortedByDescending{it.modified}.forEach{v->
+        items.values.sortedByDescending{it.modified}.take(1800).forEach{v->
             a.put(JSONObject().apply{
                 put("id",v.id);put("title",v.title);put("url",v.url)
                 put("category",v.category);put("kind",v.kind);put("modified",v.modified)
-                put("size",v.size);put("year",v.year?:"");put("poster",if(v.poster!=null)"https://appassets.androidplatform.net/poster/"+v.id else "")
-                put("genre",v.genre?:"");put("quality",v.quality?:"")
+                put("size",v.size);put("year",v.year?:"")
+                val validPoster=v.poster?.takeIf{u->Sources.defaults.any{CatalogScanner.allowed(u,it.url)} && Regex("(?i)\\.(jpe?g|png|webp)$").containsMatchIn(u)}
+                put("poster",validPoster?:"")
                 put("season",v.season?:JSONObject.NULL);put("episode",v.episode?:JSONObject.NULL)
                 put("favorite",prefs.getBoolean("fav_"+v.id,false))
                 put("position",prefs.getLong("resume_"+v.id,0L))
@@ -244,37 +153,8 @@ class MainActivity:Activity(){
         return a.toString()
     }
     inner class Bridge{
-        @JavascriptInterface fun ready()=runOnUiThread{send("settings",settingsJSON());send("catalog",catalogJSON())}
+        @JavascriptInterface fun ready()=runOnUiThread{send("catalog",catalogJSON())}
         @JavascriptInterface fun refresh()=runOnUiThread{startScan()}
-        @JavascriptInterface fun changeSetting(key:String,value:String)=runOnUiThread{
-            val allowed=mapOf(
-                "refresh" to setOf("Off","1 hour","3 hours","6 hours","12 hours","24 hours"),
-                "cardSize" to setOf("Small","Medium","Large"),
-                "showPosters" to setOf("true","false"),"showGenre" to setOf("true","false"),
-                "showYear" to setOf("true","false"),"playerMode" to setOf("Fit","Fill","Zoom"),
-                "resume" to setOf("true","false"),
-                "defaultTab" to setOf("Home","Movies","Series","Latest","Favorites"))
-            if(value in (allowed[key]?:emptySet())){
-                prefs.edit().putString("opt_"+key,value).apply()
-                send("settings",settingsJSON())
-            }
-        }
-        @JavascriptInterface fun changeSource(name:String,enabled:Boolean)=runOnUiThread{
-            if(Sources.defaults.any{it.label==name}){
-                prefs.edit().putBoolean("source_"+name,enabled).apply()
-                send("settings",settingsJSON())
-            }
-        }
-        @JavascriptInterface fun clearPosterCache()=runOnUiThread{
-            File(cacheDir,"zahrus-posters").listFiles()?.forEach{it.delete()}
-            send("status","Poster cache cleared.");send("catalog",catalogJSON())
-        }
-        @JavascriptInterface fun clearCatalog()=runOnUiThread{
-            if(!scanning){db.clear();items.clear();posters.clear()
-                Sources.defaults.forEach{prefs.edit().remove("queue_"+it.label.replace(Regex("[^A-Za-z0-9]"),"_")).apply()}
-                prefs.edit().remove("sync").apply();send("catalog",catalogJSON());send("settings",settingsJSON())
-                send("status","Catalog cleared. Press Scan to index media again.")}
-        }
         @JavascriptInterface fun play(id:String)=runOnUiThread{items[id]?.let{openPlayer(it)}}
         @JavascriptInterface fun favorite(id:String,value:Boolean)=runOnUiThread{
             if(items.containsKey(id)){
@@ -296,70 +176,30 @@ class MainActivity:Activity(){
     }catch (_:Exception){emptyList()}
     private fun startScan(){
         if(scanning){send("status","Already scanning. Please wait.");return}
+        if(!catalogLoaded){send("status","Saved catalog is loading. Try Scan again shortly.");return}
         scanning=true
         send("status","Scanning media directories (Movies and Series only)...")
         scope.launch {
             var reached=0;var discovered=0
             for(source in Sources.defaults){
-                if(!prefs.getBoolean("source_"+source.label,true))continue
                 val key=source.label.replace(Regex("[^A-Za-z0-9]"),"_")
                 try{
                     val result=CatalogScanner.scan(source,pending(key),24)
-                    result.items.forEach{newItem->
-                        val savedPoster=newItem.poster ?: items.values.firstOrNull { old ->
-                            old.title==newItem.title && old.category==newItem.category && old.poster!=null
-                        }?.poster
-                        val item=if(savedPoster!=newItem.poster)newItem.copy(poster=savedPoster) else newItem
-                        items[item.id]=item
-                        item.poster?.let{poster->posters[item.id]=poster}
-                    }
-                    withContext(Dispatchers.IO){db.save(result.items.map{items[it.id]?:it})}
+                    result.items.forEach{items[it.id]=it}
+                    withContext(Dispatchers.IO){db.save(result.items)}
                     discovered+=result.items.size
                     if(result.directories>0)reached++
                     prefs.edit().putString("queue_"+key,JSONArray(result.remaining).toString()).apply()
-                    send("catalog",catalogJSON())
                     send("status",source.label+": "+result.directories+" dirs, "+result.items.size+
                         " videos; "+result.remaining.size+" folders left in queue")
                 }catch(e:Exception){send("status",source.label+": "+(e.message?:"Connection failed"))}
             }
             if(reached>0)prefs.edit().putLong("sync",System.currentTimeMillis()).apply()
             scanning=false
-            send("settings",settingsJSON())
+            send("catalog",catalogJSON())
             send("complete","Scan completed. "+items.size+" cached videos; "+
                 reached+"/"+Sources.defaults.size+" sources reached. Refresh after 6 hours while open.")
         }
-    }
-    private fun immersive(enabled:Boolean){
-        @Suppress("DEPRECATION")
-        val flags=if(enabled) (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_STABLE) else View.SYSTEM_UI_FLAG_VISIBLE
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility=flags
-    }
-    private fun button(label:String, action:()->Unit):Button=Button(this).apply{
-        text=label;textSize=15f;setTextColor(Color.WHITE)
-        background=GradientDrawable().apply{setColor(Color.rgb(28,34,52));cornerRadius=14f}
-        setPadding(20,10,20,10);isFocusable=true
-        setOnClickListener{action()}
-    }
-    private fun resizeMode(mode:String):Int=when(mode){
-        "Fill"->AspectRatioFrameLayout.RESIZE_MODE_FILL
-        "Zoom"->AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-        else->AspectRatioFrameLayout.RESIZE_MODE_FIT
-    }
-    private fun setScale(mode:String){
-        scaleMode=mode
-        playerView?.resizeMode=resizeMode(mode)
-        prefs.edit().putString("opt_playerMode",mode).apply()
-    }
-    private fun updatePlayerLayout(){
-        val p=playerView?:return
-        val params=if(fullscreen)FrameLayout.LayoutParams(-1,-1)
-        else FrameLayout.LayoutParams((resources.displayMetrics.widthPixels*0.86).toInt(),
-            (resources.displayMetrics.heightPixels*0.80).toInt(),Gravity.CENTER)
-        p.layoutParams=params
-        immersive(fullscreen)
     }
     private fun openPlayer(item:MediaEntry){
         if(Sources.defaults.none{CatalogScanner.allowed(item.url,it.url)}){
@@ -367,41 +207,27 @@ class MainActivity:Activity(){
         }
         closePlayer()
         val exo=ExoPlayer.Builder(this).build()
-        val container=FrameLayout(this).apply{setBackgroundColor(Color.BLACK)}
         val playerUi=PlayerView(this).apply{player=exo;useController=true;isFocusable=true}
-        container.addView(playerUi,FrameLayout.LayoutParams(-1,-1))
-        val tools=LinearLayout(this).apply{
-            orientation=LinearLayout.HORIZONTAL
-            setPadding(6,6,12,6)
-            setBackgroundColor(Color.argb(180,12,16,27))
-        }
-        val fullButton=button("⛶ Fullscreen"){fullscreen=!fullscreen;updatePlayerLayout()}
-        val fitButton=button("Fit / Fill / Zoom"){
-            val next=when(scaleMode){"Fit"->"Fill";"Fill"->"Zoom";else->"Fit"}
-            setScale(next)
-            Toast.makeText(this,"Display mode: "+next,Toast.LENGTH_SHORT).show()
-        }
-        val exitButton=button("✕ Exit"){closePlayer();send("catalog",catalogJSON())}
-        listOf(fullButton,fitButton,exitButton).forEach{
-            tools.addView(it,LinearLayout.LayoutParams(-2,-2).apply{marginStart=8})
-        }
-        container.addView(tools,FrameLayout.LayoutParams(-2,-2,Gravity.TOP or Gravity.END))
         exo.addListener(object:Player.Listener{
             override fun onPlayerError(error:PlaybackException){
                 Toast.makeText(this@MainActivity,"Playback error: "+error.errorCodeName+
                     ". Try external player.",Toast.LENGTH_LONG).show()
             }
         })
-        player=exo;playerView=playerUi;playerContainer=container;playingId=item.id
-        fullscreen=true
-        scaleMode=prefs.getString("opt_playerMode","Fit")?:"Fit"
-        playerUi.resizeMode=resizeMode(scaleMode)
-        web.visibility=View.GONE
-        root.addView(container,FrameLayout.LayoutParams(-1,-1))
-        updatePlayerLayout()
+        player=exo;playerView=playerUi;playingId=item.id
+        val holder=FrameLayout(this).apply{setBackgroundColor(Color.BLACK)}
+        holder.addView(playerUi,FrameLayout.LayoutParams(-1,-1))
+        val controls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL}
+        val exit=Button(this).apply{text="Exit Fullscreen";setOnClickListener{closePlayer();send("catalog",catalogJSON())}}
+        controls.addView(exit)
+        holder.addView(controls,FrameLayout.LayoutParams(-2,-2,Gravity.TOP or Gravity.END))
+        playerHolder=holder
+        root.addView(holder,FrameLayout.LayoutParams(-1,-1))
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         playerUi.requestFocus()
         exo.setMediaItem(ExoMediaItem.fromUri(item.url));exo.prepare()
-        val pos=if(prefs.getString("opt_resume","true")=="true")prefs.getLong("resume_"+item.id,0L)else 0L
+        val pos=prefs.getLong("resume_"+item.id,0L)
         if(pos>0)exo.seekTo(pos)
         exo.playWhenReady=true
     }
@@ -412,20 +238,20 @@ class MainActivity:Activity(){
     }
     private fun closePlayer(){
         savePosition();player?.release();player=null
-        playerContainer?.let{root.removeView(it)};playerContainer=null;playerView=null;playingId=null
-        immersive(false)
-        if(::web.isInitialized){web.visibility=View.VISIBLE;runCatching{web.requestFocus()}}
+        playerHolder?.let{root.removeView(it)};playerHolder=null;playerView=null;playingId=null
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_VISIBLE
+        if(::web.isInitialized)web.requestFocus()
     }
     @Deprecated("Deprecated in Java")
     override fun onBackPressed(){
         if(player!=null){closePlayer();send("catalog",catalogJSON())}
         else if(::web.isInitialized)web.evaluateJavascript("window.tvBack()",null)
-        else super.onBackPressed()
     }
     override fun onResume(){
         super.onResume()
         handler.removeCallbacks(intervalRunner)
-        handler.postDelayed(intervalRunner,60000L)
+        handler.postDelayed(intervalRunner,interval)
     }
     override fun onPause(){
         savePosition();player?.pause()
@@ -435,10 +261,7 @@ class MainActivity:Activity(){
     override fun onDestroy(){
         handler.removeCallbacks(intervalRunner)
         if(::root.isInitialized)closePlayer()
-        if(::web.isInitialized){
-            runCatching{web.removeJavascriptInterface("NativeTV")}
-            runCatching{web.destroy()}
-        }
+        if(::web.isInitialized){runCatching{web.removeJavascriptInterface("NativeTV")};runCatching{web.destroy()}}
         if(::db.isInitialized)runCatching{db.close()}
         scope.cancel()
         super.onDestroy()

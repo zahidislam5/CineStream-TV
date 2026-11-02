@@ -1,4 +1,4 @@
-# ZAHRUS TV v0.5.1
+# ZAHRUS TV v0.5.2
 
 Native Android application with bundled offline Web UI, Kotlin h5ai directory scanner, SQLite catalog, and Media3 ExoPlayer. **Movies and TV/Web Series only**; Games/Software are never indexed.
 
@@ -34,3 +34,13 @@ Note: Previous debug builds may be signed with different temporary GitHub runner
 - Fewer posters/cards constructed at once on memory-constrained TVs
 
 Build success alone does not prove crash-free operation on a specific TV. ADB logcat is needed if a particular device still closes the app.
+
+## v0.5.2 stability rollback
+- Reverted to the previously working v0.4 simple grid layout, keeping ZAHRUS TV branding and launcher icon
+- Poster images shown inside grid cards (when image files are supplied by the ISP server)
+- No Netflix-style homepage, no heavyweight Settings screen, no automatic network scan on startup
+- Existing SQLite v2 database retained so previously indexed movies and favorites are not intentionally deleted
+- Catalog loading runs off the UI thread; only first 1,800 recent cached entries transferred to WebView to limit memory
+- Home screen limits each category to 10 cards; Movies/Series pages show 48 cards each
+- Native internal playback remains with fullscreen and an Exit button
+- Emulator smoke test remains enabled; actual private ISP content must be verified on user's TV
