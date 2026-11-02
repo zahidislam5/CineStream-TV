@@ -100,7 +100,7 @@ select{padding:12px 15px;background:#292e3e;border:1px solid #454c5c;border-radi
 (function(){
 const $=id=>document.getElementById(id);
 const defaults={refresh:"6 hours",defaultTab:"Home",cardSize:"Medium",showPosters:"true",showGenre:"true",showYear:"true",playerMode:"Fit",resume:"true",sources:{}};
-const S={items:[],tab:"Home",query:"",year:"",category:"",genre:"",sort:"new",offset:0,limit:72,detail:null,settings:Object.assign({},defaults)};
+const S={items:[],tab:"Home",query:"",year:"",category:"",genre:"",sort:"new",offset:0,limit:42,detail:null,settings:Object.assign({},defaults)};
 const sourceNames=["English Movies","English 1080p","Hindi Movies","South Indian","Hindi Dubbed","Bangla Movies","Animation","Animation 1080p","Foreign Movies","IMDb Top 250","3D Movies","TV & Web Series","Korean Series","Anime Series","Documentaries"];
 let previousFocus=null,clearArmed=false,initial=false;
 const el=(tag,cls,txt)=>{const a=document.createElement(tag);if(cls)a.className=cls;if(txt!==undefined)a.textContent=txt;return a};
@@ -128,7 +128,7 @@ function card(x){const b=el("button","card");b.dataset.id=x.id;b.setAttribute("a
  info.append(el("div","meta",x.category+(x.favorite?"  ♥":"")));b.append(info);b.onclick=()=>details(x);return b}
 function section(name,rows){if(!rows.length)return null;
  const sec=el("section","section"),head=el("div","sectionHead"),rail=el("div","rail");head.append(el("h2","",name),el("span","count",rows.length+" titles"));
- rows.slice(0,38).forEach(x=>rail.append(card(x)));sec.append(head,rail);return sec}
+ rows.slice(0,14).forEach(x=>rail.append(card(x)));sec.append(head,rail);return sec}
 function hero(rows){const h=$("hero");h.querySelectorAll("img").forEach(i=>i.remove());
  const x=rows.find(x=>x.poster)||rows[0];
  if(!x){$("heroTitle").textContent="Everything you love. In one place.";$("heroMeta").textContent="Connect to your ISP and press Scan to discover titles.";$("heroPlay").style.display="none";$("heroInfo").style.display="none";return}

@@ -9,6 +9,12 @@ import android.net.Uri
 import android.view.View
 import android.view.Gravity
 import android.graphics.Color
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Log
+import android.webkit.RenderProcessGoneDetail
+import java.io.ByteArrayOutputStream
+import java.util.concurrent.Semaphore
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.widget.Button
@@ -62,6 +68,8 @@ class MainActivity:Activity(){
     private var fullscreen=true
     private var scaleMode="Fit"
     private val posters=ConcurrentHashMap<String,String>()
+    private val posterSlots=Semaphore(3)
+    private var startupWarning:String?=null
     private var playingId:String?=null
     private var scanning=false
     private var pageReady=false
@@ -74,7 +82,14 @@ class MainActivity:Activity(){
     }
     override fun onCreate(savedInstanceState:Bundle?){
         super.onCreate(savedInstanceState)
-        db=CatalogDatabase(this);db.load().forEach{items[it.id]=it;it.poster?.let{poster->posters[it.id]=poster}}
+        try {
+        db=CatalogDatabase(this)
+        try {
+            db.load().forEach{items[it.id]=it;it.poster?.let{poster->posters[it.id]=poster}}
+        }catch(e:Exception){
+            Log.e("ZAHRUS-TV","Could not load old catalog. Data is preserved for recovery.",e)
+            startupWarning="The saved catalog could not be loaded. Your app data was not deleted."
+        }
         root=FrameLayout(this)
         val loader=WebViewAssetLoader.Builder()
             .addPathHandler("/assets/",WebViewAssetLoader.AssetsPathHandler(this))
@@ -94,12 +109,18 @@ class MainActivity:Activity(){
                     return !(request.url.scheme=="https"&&request.url.host=="appassets.androidplatform.net" &&
                         request.url.path?.startsWith("/assets/")==true)
                 }
+                override fun onRenderProcessGone(view:WebView,detail:RenderProcessGoneDetail):Boolean{
+                    Log.e("ZAHRUS-TV","WebView renderer stopped. didCrash="+detail.didCrash())
+                    showRecoveryScreen("The TV's WebView renderer stopped unexpectedly. Try Retry or clear Android System WebView cache in TV Settings.")
+                    return true
+                }
                 override fun onPageFinished(view:WebView,url:String){
                     if(url.startsWith("https://appassets.androidplatform.net/assets/")){
                         pageReady=true;send("settings",settingsJSON());send("catalog",catalogJSON())
                         send("status","Cached "+items.size+" files. Scans every 6 hours while app is open.")
                         val delay=refreshMillis()
-                        if(delay>0&&(items.isEmpty()||System.currentTimeMillis()-prefs.getLong("sync",0L)>=delay))startScan()
+                        if(startupWarning!=null)send("status",startupWarning!!)
+                        else if(delay>0&&(items.isEmpty()||System.currentTimeMillis()-prefs.getLong("sync",0L)>=delay))startScan()
                     }
                 }
             }
@@ -110,6 +131,39 @@ class MainActivity:Activity(){
         }
         root.addView(web,FrameLayout.LayoutParams(-1,-1))
         setContentView(root)
+        } catch(e:Exception) {
+            Log.e("ZAHRUS-TV","Startup failure",e)
+            showRecoveryScreen("Startup error: "+(e.message?:"Unknown error"))
+        }
+    }
+    private fun showRecoveryScreen(message:String){
+        runOnUiThread{
+            if(!::root.isInitialized)root=FrameLayout(this)
+            root.removeAllViews()
+            val panel=LinearLayout(this).apply{
+                orientation=LinearLayout.VERTICAL
+                setPadding(45,45,45,45)
+                setBackgroundColor(Color.rgb(13,16,29))
+            }
+            val title=TextView(this).apply{
+                text="ZAHRUS TV · Recovery"
+                textSize=28f;setTextColor(Color.WHITE)
+                setTypeface(null,Typeface.BOLD)
+            }
+            val description=TextView(this).apply{
+                text=message+"\nYour saved movies and favorites have not been automatically deleted. Please share a screenshot of this message."
+                textSize=17f;setTextColor(Color.LTGRAY);setPadding(0,28,0,28)
+            }
+            val retry=Button(this).apply{
+                text="Retry opening ZAHRUS TV"
+                setOnClickListener{recreate()}
+            }
+            panel.addView(title)
+            panel.addView(description)
+            panel.addView(retry)
+            root.addView(panel,FrameLayout.LayoutParams(-1,-1))
+            setContentView(root)
+        }
     }
     private fun send(type:String,value:String){
         runOnUiThread{
@@ -131,29 +185,48 @@ class MainActivity:Activity(){
     }.toString()
     private fun posterAllowed(url:String):Boolean = Sources.defaults.any{CatalogScanner.allowed(url,it.url)}&&
        Regex("(?i)\\.(jpg|jpeg|png|webp)$").containsMatchIn(url)
+    private fun normalizePoster(data:ByteArray):ByteArray?{
+        // Never hand a full-size, multi-megapixel still to low-memory TV WebView.
+        val opts=BitmapFactory.Options().apply{inJustDecodeBounds=true}
+        BitmapFactory.decodeByteArray(data,0,data.size,opts)
+        if(opts.outWidth<=0||opts.outHeight<=0)return null
+        var sample=1
+        while(opts.outWidth/sample>640||opts.outHeight/sample>960)sample*=2
+        val decoding=BitmapFactory.Options().apply{inSampleSize=sample;inPreferredConfig=Bitmap.Config.RGB_565}
+        val bitmap=BitmapFactory.decodeByteArray(data,0,data.size,decoding)?:return null
+        return try{
+            val out=ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG,78,out)
+            out.toByteArray().takeIf{it.isNotEmpty()&&it.size<600_000}
+        }finally{bitmap.recycle()}
+    }
     private fun loadPoster(name:String):WebResourceResponse?{
         val id=name.substringBefore("?").substringBefore("/")
         if(!Regex("[a-f0-9]{24}").matches(id))return null
         val url=posters[id]?:return null
         if(!posterAllowed(url))return null
-        val posterDirectory=File(cacheDir,"zahrus-posters");posterDirectory.mkdirs()
-        val imageFile=File(posterDirectory,id+".img")
-        val bytes=try{
-            if(imageFile.exists()&&imageFile.length() in 1..3_000_000)imageFile.readBytes()
-            else{
-                val c=URL(url).openConnection() as HttpURLConnection
-                c.connectTimeout=4000;c.readTimeout=6500;c.instanceFollowRedirects=false
-                try{
-                    if(c.responseCode!=200||c.contentLengthLong>3_000_000L)return null
-                    val data=c.inputStream.use{it.readNBytes(3_000_001)}
-                    if(data.isEmpty()||data.size>3_000_000)return null
-                    imageFile.writeBytes(data)
-                    data
-                }finally{c.disconnect()}
+        if(!posterSlots.tryAcquire())return null
+        return try {
+            val posterDirectory=File(cacheDir,"zahrus-posters").apply{mkdirs()}
+            val imageFile=File(posterDirectory,id+".small.jpg")
+            val bytes=if(imageFile.exists()&&imageFile.length() in 1..600_000)imageFile.readBytes()
+            else {
+                val conn=URL(url).openConnection() as HttpURLConnection
+                conn.connectTimeout=3500;conn.readTimeout=5000;conn.instanceFollowRedirects=false
+                val raw=try{
+                    if(conn.responseCode!=200||conn.contentLengthLong>2_500_000L)return null
+                    conn.inputStream.use{it.readNBytes(2_500_001)}
+                }finally{conn.disconnect()}
+                if(raw.isEmpty()||raw.size>2_500_000)return null
+                val scaled=normalizePoster(raw)?:return null
+                imageFile.writeBytes(scaled)
+                scaled
             }
-        }catch (_:Exception){return null}
-        val mime=when{url.endsWith(".png",true)->"image/png";url.endsWith(".webp",true)->"image/webp";else->"image/jpeg"}
-        return WebResourceResponse(mime,null,ByteArrayInputStream(bytes))
+            WebResourceResponse("image/jpeg",null,ByteArrayInputStream(bytes))
+        }catch(e:Exception){
+            Log.w("ZAHRUS-TV","Poster request failed",e)
+            null
+        }finally{posterSlots.release()}
     }
     private fun catalogJSON():String{
         val a=JSONArray()
@@ -341,12 +414,13 @@ class MainActivity:Activity(){
         savePosition();player?.release();player=null
         playerContainer?.let{root.removeView(it)};playerContainer=null;playerView=null;playingId=null
         immersive(false)
-        if(::web.isInitialized){web.visibility=View.VISIBLE;web.requestFocus()}
+        if(::web.isInitialized){web.visibility=View.VISIBLE;runCatching{web.requestFocus()}}
     }
     @Deprecated("Deprecated in Java")
     override fun onBackPressed(){
         if(player!=null){closePlayer();send("catalog",catalogJSON())}
-        else web.evaluateJavascript("window.tvBack()",null)
+        else if(::web.isInitialized)web.evaluateJavascript("window.tvBack()",null)
+        else super.onBackPressed()
     }
     override fun onResume(){
         super.onResume()
@@ -360,9 +434,13 @@ class MainActivity:Activity(){
     }
     override fun onDestroy(){
         handler.removeCallbacks(intervalRunner)
-        closePlayer()
-        web.removeJavascriptInterface("NativeTV")
-        web.destroy();db.close();scope.cancel()
+        if(::root.isInitialized)closePlayer()
+        if(::web.isInitialized){
+            runCatching{web.removeJavascriptInterface("NativeTV")}
+            runCatching{web.destroy()}
+        }
+        if(::db.isInitialized)runCatching{db.close()}
+        scope.cancel()
         super.onDestroy()
     }
 }

@@ -1,4 +1,4 @@
-# ZAHRUS TV v0.5
+# ZAHRUS TV v0.5.1
 
 Native Android application with bundled offline Web UI, Kotlin h5ai directory scanner, SQLite catalog, and Media3 ExoPlayer. **Movies and TV/Web Series only**; Games/Software are never indexed.
 
@@ -25,3 +25,12 @@ The scanner reads h5ai `#fallback` tables, recurses up to 24 directories per sou
 - Existing package identifier and SQLite database retained; DB version 2 adds genre and quality columns
 
 Note: Previous debug builds may be signed with different temporary GitHub runner debug keys; installing v0.5 over v0.4 may fail due to signature mismatch. Preserve old install unless ready to reinstall and lose local app data.
+
+## v0.5.1 Startup and branding patch
+- Brand-new vector ZAHRUS TV launcher icon and Android TV banner
+- Safer, idempotent SQLite v1-to-v2 migration; startup recovery UI preserves existing data
+- WebView renderer crash recovery screen rather than immediately terminating the Activity
+- Bounded, resized 640x960 JPEG poster cache and at most 3 concurrent poster requests
+- Fewer posters/cards constructed at once on memory-constrained TVs
+
+Build success alone does not prove crash-free operation on a specific TV. ADB logcat is needed if a particular device still closes the app.

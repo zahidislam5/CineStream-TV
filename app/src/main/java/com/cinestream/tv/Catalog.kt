@@ -175,8 +175,13 @@ class CatalogDatabase(ctx:Context):SQLiteOpenHelper(ctx,"cinestream.db",null,2){
     }
     override fun onUpgrade(db:SQLiteDatabase,oldVersion:Int,newVersion:Int){
         if(oldVersion<2){
-            db.execSQL("ALTER TABLE videos ADD COLUMN genre TEXT")
-            db.execSQL("ALTER TABLE videos ADD COLUMN quality TEXT")
+            val columns=mutableSetOf<String>()
+            db.rawQuery("PRAGMA table_info(videos)",null).use{c->
+                val idx=c.getColumnIndex("name")
+                if(idx>=0)while(c.moveToNext())columns.add(c.getString(idx))
+            }
+            if("genre" !in columns)db.execSQL("ALTER TABLE videos ADD COLUMN genre TEXT")
+            if("quality" !in columns)db.execSQL("ALTER TABLE videos ADD COLUMN quality TEXT")
         }
     }
     fun clear(){writableDatabase.delete("videos",null,null)}
