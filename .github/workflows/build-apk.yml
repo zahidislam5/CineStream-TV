@@ -60,6 +60,15 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
+      - name: Report successful APK build
+        if: steps.compile.outcome == 'success' && success()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment 1 --body "APK compiled and artifact uploaded successfully. Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          gh issue close 1 --reason completed
+
       - name: Report build failure
         if: failure() || steps.compile.outcome == 'failure'
         continue-on-error: true
