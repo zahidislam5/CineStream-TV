@@ -1,169 +1,268 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ZAHRUS TV</title>
 <style>
-:root{font-family:Arial,Helvetica,sans-serif;background:#090b13;color:#f7f8fb;font-size:20px}
-*{box-sizing:border-box}body{margin:0}button,input{font:inherit}
-header{display:flex;align-items:center;gap:14px;background:#111520;padding:21px 3.5%;position:sticky;top:0;z-index:5}
-.brand{color:#ff536a;font-size:27px;font-weight:bold;white-space:nowrap;margin-right:25px}
-nav{display:flex;gap:9px}button{border:0;border-radius:9px;padding:12px 16px;background:#252b39;color:#fff;cursor:pointer}
-button.selected,.primary{background:#da3953}button:focus,input:focus{outline:4px solid #fff;outline-offset:4px;transform:scale(1.045);position:relative;z-index:2}
-input{background:#181f2b;border:2px solid #353d4c;border-radius:9px;color:#fff;padding:11px;width:230px;min-width:0}
-#scan{margin-left:auto}#status{background:#10131e;color:#b6bfcd;padding:10px 4%;font-size:14px;min-height:37px}
-main{padding:24px 4% 80px}.hero{background:linear-gradient(112deg,#312338,#151f35 55%,#24273c);padding:35px 40px;border-radius:16px;margin:6px 0 26px}
-.hero h1{font-size:42px;margin:0 0 10px}.hero p{font-size:18px;color:#b9c2d4;margin:0;line-height:1.5}
-h2{font-size:26px;margin:36px 0 16px}small,.meta{font-size:15px;color:#a9b2c6}
+:root{font-family:Arial,"Helvetica Neue",sans-serif;font-size:19px;color:#f7f8fb;background:#0a0d15}
+*{box-sizing:border-box}body{margin:0;min-height:100vh}button,input,select{font:inherit;color:inherit}
+button{background:#273047;border:0;border-radius:9px;padding:12px 16px;cursor:pointer}
+button:focus,input:focus,select:focus{outline:4px solid white;outline-offset:3px;position:relative;z-index:4}
+button:focus{transform:scale(1.04)}button:disabled{opacity:.36}
+header{display:flex;align-items:center;flex-wrap:wrap;gap:14px;background:#111521;padding:18px 3.5%;position:sticky;top:0;z-index:8;border-bottom:1px solid #252b39}
+.brand{font-size:28px;font-weight:900;white-space:nowrap;color:#ff5278;margin-right:15px}
+nav{display:flex;gap:9px;flex-wrap:wrap}
+nav button.selected{background:#dc3c60;color:white}
+#search{margin-left:auto;width:265px;max-width:75vw;padding:12px 15px;background:#1a2232;border:2px solid #46566d;border-radius:9px}
+#scan{background:#dc3c60;font-weight:bold}
+#stop{display:none;background:#76334c}
+#status{background:#121723;color:#bfc8db;padding:11px 3.5%;font-size:15px;min-height:43px}
+#progress{display:none;padding:11px 3.5%;font-size:14px;color:#cbd5e4;background:#202534}
+#progress.visible{display:block}
+main{padding:25px 3.5% 80px}
+.hero{padding:30px 36px;background:linear-gradient(110deg,#35263d,#172139 60%,#283143);border-radius:14px;margin:0 0 24px}
+.hero h1{font-size:37px;margin:0 0 10px}
+.hero p{font-size:17px;color:#ccd4e2;line-height:1.5;margin:0}
+.toolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px;background:#161c2a;border:1px solid #313b4a;border-radius:11px;margin:20px 0}
+.toolbar select{background:#272f42;border:1px solid #4a5367;padding:12px;border-radius:7px;max-width:260px}
+.toolbar button{background:#343f51}
+#categoryShortcuts{display:flex;overflow-x:auto;gap:9px;padding:8px 1px 19px;scrollbar-width:thin}
+#categoryShortcuts button{white-space:nowrap;font-size:15px;background:#242d40;border:1px solid #374257}
+h2{font-size:25px;margin:30px 0 15px}
+.group h2{margin-bottom:14px}
 .grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:17px}
-.card{white-space:normal;text-align:left;padding:0;overflow:hidden;background:#1d2232;border:1px solid #33394d;border-radius:12px;min-height:325px}
-.card .cover{height:200px;background:linear-gradient(135deg,#3b4c65,#283147 55%,#462638);display:flex;align-items:center;justify-content:center;font-size:40px;color:#c7d3e9;position:relative;overflow:hidden}
-.card .cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.card .cover .fallback{opacity:.7}
-.card .info{padding:12px}.card strong{display:block;font-size:17px;line-height:1.35;min-height:44px;overflow-wrap:anywhere}.card .meta{margin-top:10px;display:block}
-.empty{background:#171b2b;padding:30px;border-radius:12px;color:#abb4c8;line-height:1.5}
-#pages{display:flex;gap:18px;align-items:center;margin-top:26px}
-#detail{display:none;position:fixed;z-index:20;inset:0;overflow:auto;background:#090b13;padding:6vh 8vw}
-#detail.open{display:block}#detail h1{font-size:43px;margin:26px 0 12px;max-width:1000px}
-#detail p{color:#bac5d9}#detail .actions{display:flex;gap:14px;margin:26px 0 34px}
-.episode{display:flex;justify-content:space-between;align-items:center;border:1px solid #30394c;background:#191e2b;border-radius:10px;padding:10px 15px;margin:10px 0;gap:15px}
-@media(max-width:1100px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}header{flex-wrap:wrap}#scan{margin-left:0}}
-@media(min-width:1900px){.grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
+.card{background:#1c2333;border:1px solid #354056;border-radius:12px;padding:0;overflow:hidden;text-align:left;min-height:320px}
+.card:focus{box-shadow:0 10px 30px #000b}
+.cover{height:200px;background:linear-gradient(150deg,#3c4e70,#373550 55%,#67304f);display:flex;align-items:center;justify-content:center;font-size:52px;position:relative;overflow:hidden}
+.cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cover .fallback{opacity:.6}
+.card .info{padding:13px}
+.card strong{display:block;font-size:17px;line-height:1.4;min-height:49px;overflow-wrap:anywhere}
+.meta{font-size:14px;color:#b7c2d7;margin-top:7px}
+.group{margin-bottom:36px}
+.group .grid{grid-template-columns:repeat(6,minmax(0,1fr))}
+#pagination{display:flex;justify-content:center;align-items:center;gap:19px;margin:30px 0}
+#pagination button{padding:13px 22px}
+.empty{background:#1a2131;border-radius:11px;padding:32px;color:#afbdd1;line-height:1.5}
+#titleBar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+#detail{display:none;position:fixed;z-index:20;inset:0;overflow:auto;background:#0a0d15;padding:5vh 7vw}
+#detail.open{display:block}#detail h1{font-size:42px;margin:32px 0 13px}
+#detail p{color:#c0ccda;font-size:18px;line-height:1.5}
+#detail .actions{display:flex;gap:14px;flex-wrap:wrap;margin:26px 0 34px}
+#detail .primary{background:#db365a}
+#episodes{max-width:950px}
+.episode{background:#191f2e;border:1px solid #344052;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:12px 17px;margin:9px 0;border-radius:9px}
+.episode button{white-space:nowrap}
+@media(max-width:1150px){.grid,.group .grid{grid-template-columns:repeat(4,minmax(0,1fr))}#search{margin-left:0}}
+@media(max-width:700px){.grid,.group .grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hero h1{font-size:29px}.brand{font-size:24px}}
 </style></head>
 <body>
-<header><div class="brand">▶ ZAHRUS TV</div><nav>
-<button data-tab="Home" class="selected">Home</button><button data-tab="Movies">Movies</button>
-<button data-tab="Series">Series</button><button data-tab="Latest">Latest</button><button data-tab="Favorites">Favorites</button>
-</nav><input id="search" placeholder="Search titles" aria-label="Search titles"><button id="scan" class="primary">↻ Scan</button></header>
-<div id="status">Connect your Google TV to the ISP network. Only Movies and Web Series are indexed.</div>
-<main><div class="hero"><h1>Movies and Series. One screen.</h1>
-<p>Browse your ISP library using the TV remote. Select Scan when you want to refresh the catalog.<br>No Games. No Software. No external PC required.</p></div>
-<div id="content"></div><div id="pages"></div></main>
-<div id="detail"><button id="back">← Back</button><h1 id="title"></h1><p id="info"></p>
-<div class="actions"><button id="play" class="primary">▶ Play</button><button id="favorite">♡ Favorite</button><button id="external">External Player</button></div>
-<h2 id="episodeHeading" style="display:none">Episodes</h2><div id="episodes"></div></div>
+<header>
+<div class="brand">▶ ZAHRUS TV</div>
+<nav>
+<button class="selected" data-tab="Home">Home</button>
+<button data-tab="Movies">Movies</button>
+<button data-tab="Series">Series</button>
+<button data-tab="Latest">Latest</button>
+<button data-tab="Favorites">Favorites</button>
+</nav>
+<input id="search" placeholder="Search title, year, episode…" aria-label="Search entire library" autocomplete="off">
+<button id="scan">↻ Scan All</button>
+<button id="stop">Pause Scan</button>
+</header>
+<div id="status">Loading the ZAHRUS TV library. Games and Software are excluded.</div>
+<div id="progress"></div>
+<main>
+<div class="hero"><h1>Movies and Series. One screen.</h1>
+<p>Browse your ISP movie library with the TV remote. One complete scan visits every reachable Movie and Series folder, and saves progress so you can resume later.</p></div>
+<div id="categoryShortcuts" aria-label="Quick categories"></div>
+<div id="toolbar" class="toolbar" style="display:none">
+<select id="category" aria-label="Choose category"><option value="">All Categories</option></select>
+<select id="year" aria-label="Choose release year"><option value="">All Years</option></select>
+<select id="sort" aria-label="Sort results"><option value="new">Recently Added</option><option value="old">Oldest Added</option><option value="az">Title A–Z</option><option value="za">Title Z–A</option><option value="year">Release Year</option></select>
+<button id="reset">Clear Filters</button>
+</div>
+<div id="content"></div>
+<div id="pagination"></div>
+</main>
+<div id="detail"><button id="back">← Back</button><h1 id="detailTitle"></h1><p id="detailInfo"></p>
+<div class="actions"><button class="primary" id="play">▶ Play</button>
+<button id="fav">♡ Favorite</button><button id="external">External Player</button></div>
+<h2 id="episodeTitle" style="display:none">Episodes</h2><div id="episodes"></div>
+<button id="moreEpisodes" style="display:none">More Episodes</button>
+</div>
 <script>
-(function(){
-  const $=id=>document.getElementById(id);
-  const state={catalog:[],tab:'Home',query:'',offset:0,limit:48,detail:null};
-  let lastCard=null;
-  function nativeCall(method,...args){
-    if(window.NativeTV && typeof window.NativeTV[method]==='function')window.NativeTV[method](...args);
-    else $('status').textContent='Open the Android TV APK to use native scanner and player.';
+(()=>{
+const $=id=>document.getElementById(id);
+const st={tab:"Home",category:"",year:"",sort:"new",query:"",offset:0,total:0,request:0,items:[],groups:[],categories:[],years:[],detail:null,episodeOffset:0,episodeTotal:0};
+let debounce=null,restoreFocus=null,scanning=false;
+function nativeCall(name,...args){
+ if(window.NativeTV&&typeof window.NativeTV[name]==="function")window.NativeTV[name](...args);
+ else $("status").textContent="This action requires the Android TV application.";
+}
+function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n}
+function isPoster(url){
+ try{const p=new URL(url);return p.protocol==="http:"&&["172.16.50.7","172.16.50.10","172.16.50.12","172.16.50.14"].includes(p.hostname)&&/\.(jpe?g|png|webp)$/i.test(p.pathname)}
+ catch(e){return false}
+}
+function card(item){
+ const b=el("button","card");b.dataset.id=item.id;
+ const cover=el("div","cover");cover.append(el("span","fallback",item.kind==="Series"?"▣":"▶"));
+ if(item.poster&&isPoster(item.poster)){
+  const image=el("img");image.loading="lazy";image.alt="";image.decoding="async";
+  image.src=item.poster;image.onerror=()=>image.remove();cover.append(image)
+ }
+ b.append(cover);
+ const info=el("div","info");info.append(el("strong","",item.title));
+ info.append(el("div","meta",item.kind+" · "+(item.year||item.category)+(item.favorite?" · ♥":"")));
+ info.append(el("div","meta",item.category));b.append(info);
+ b.onclick=()=>detail(item);return b
+}
+function grid(title,items){
+ const wrapper=el("section","group");
+ wrapper.append(el("h2","",title+" ("+items.length+")"));
+ const g=el("div","grid");items.forEach(x=>g.append(card(x)));wrapper.append(g);return wrapper
+}
+function display(){
+ const prior=document.activeElement?.dataset?.id;
+ document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("selected",b.dataset.tab===st.tab));
+ $("content").replaceChildren();$("pagination").replaceChildren();
+ const home=st.tab==="Home"&&!st.query&&!st.category&&!st.year;
+ $("toolbar").style.display=home?"none":"flex";
+ if(home){
+  if(!st.groups.length)$("content").append(el("div","empty","Your library is empty. Connect to the ISP network and choose Scan All."));
+  st.groups.forEach(g=>{if(g.items?.length)$("content").append(grid(g.title,g.items))});
+ }else{
+  const top=el("div","",null);top.id="titleBar";
+  top.append(el("h2","",st.query?"Search Results":st.category||st.tab),el("span","meta",st.total+" titles"));
+  $("content").append(top);
+  if(!st.items.length)$("content").append(el("div","empty","No results yet. Try a different category, search term or scan your ISP library."));
+  else $("content").append(grid("Results",st.items));
+  if(st.total>48){
+    const back=el("button","","← Previous");back.disabled=st.offset===0;
+    back.onclick=()=>{st.offset=Math.max(0,st.offset-48);fetchBrowse()};
+    const next=el("button","","Next →");next.disabled=st.offset+48>=st.total;
+    next.onclick=()=>{st.offset+=48;fetchBrowse()};
+    $("pagination").append(back,el("span","",String(st.offset+1)+"–"+Math.min(st.total,st.offset+48)+" / "+st.total),next)
   }
-  window.fromNative=(type,payload)=>{
-    if(type==='catalog'){try{state.catalog=JSON.parse(payload);draw()}catch(e){$('status').textContent='Catalog could not be decoded.'}}
-    else if(type==='status'||type==='complete')$('status').textContent=payload;
-  };
-  function normalized(s){return String(s||'').toLowerCase()}
-  function filtered(){
-    let rows=state.catalog.filter(x=>!state.query||[x.title,x.category,x.year,x.kind].some(s=>normalized(s).includes(normalized(state.query))));
-    if(state.tab==='Movies')rows=rows.filter(x=>x.kind==='Movie');
-    if(state.tab==='Series')rows=rows.filter(x=>x.kind==='Series');
-    if(state.tab==='Favorites')rows=rows.filter(x=>x.favorite);
-    rows.sort((a,b)=>String(b.modified||'').localeCompare(String(a.modified||'')));
-    const map=new Map();
-    rows.forEach(x=>{const key=x.kind+':'+x.title+':'+x.category;if(!map.has(key))map.set(key,x)});
-    return [...map.values()];
-  }
-  function elem(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e}
-  function safePoster(u){
-    try {
-      const parsed=new URL(u);
-      return parsed.protocol==='http:' &&
-        ['172.16.50.7','172.16.50.10','172.16.50.12','172.16.50.14'].includes(parsed.hostname) &&
-        /\.(jpe?g|png|webp)$/i.test(parsed.pathname);
-    } catch(e){return false}
-  }
-  function card(item){
-    const b=elem('button','card');b.dataset.id=item.id;
-    const cover=elem('div','cover');
-    cover.append(elem('span','fallback',item.kind==='Series'?'▣':'▶'));
-    if(item.poster && safePoster(item.poster)){
-      const img=elem('img');img.loading='lazy';img.decoding='async';img.alt='';
-      img.src=item.poster;img.onerror=()=>img.remove();cover.append(img);
-    }
-    b.append(cover);
-    const info=elem('div','info');info.append(elem('strong','',item.title));
-    info.append(elem('span','meta',item.kind+' · '+(item.year||item.category)+(item.favorite?' · ♥':'')));
-    b.append(info);b.onclick=()=>details(item);return b
-  }
-  function section(name,rows,max){
-    const s=elem('section');const h=elem('h2','',name+'  ('+rows.length+')');s.append(h);
-    const g=elem('div','grid');rows.slice(0,max).forEach(item=>g.append(card(item)));s.append(g);return s
-  }
-  function draw(){
-    const focused=document.activeElement?.dataset?.id;
-    document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('selected',b.dataset.tab===state.tab));
-    $('content').replaceChildren();$('pages').replaceChildren();
-    const all=filtered();
-    if(state.tab==='Home'&&!state.query){
-      const groups=[
-        ['Recently Added',all],
-        ['TV / Web Series',all.filter(x=>x.kind==='Series')],
-        ['English Movies',all.filter(x=>normalized(x.category).includes('english'))],
-        ['Hindi Movies',all.filter(x=>normalized(x.category).includes('hindi'))],
-        ['Bangla Movies',all.filter(x=>normalized(x.category).includes('bangla'))],
-        ['South Indian',all.filter(x=>normalized(x.category).includes('south'))],
-        ['Animation',all.filter(x=>normalized(x.category).includes('animation'))]
-      ];
-      groups.filter(x=>x[1].length>0).forEach(x=>$('content').append(section(x[0],x[1],10)));
-    }else{
-      $('content').append(section(state.query?'Search results':state.tab,all.slice(state.offset,state.offset+state.limit),state.limit));
-      if(all.length>state.limit){
-        const prev=elem('button','','← Previous'),next=elem('button','','Next →');
-        prev.disabled=state.offset===0;next.disabled=state.offset+state.limit>=all.length;
-        prev.onclick=()=>{state.offset=Math.max(0,state.offset-state.limit);draw()};
-        next.onclick=()=>{state.offset+=state.limit;draw()};
-        $('pages').append(prev,elem('span','',String(state.offset+1)+'–'+String(Math.min(all.length,state.offset+state.limit))+' of '+all.length),next)
-      }
-    }
-    if(!all.length)$('content').append(elem('div','empty','No matching videos in the cached catalog. Connect to ISP Wi-Fi and press Scan.'));
-    if(focused){const b=[...document.querySelectorAll('.card')].find(x=>x.dataset.id===focused);if(b)b.focus({preventScroll:true})}
-  }
-  function details(x){
-    state.detail=x;lastCard=document.activeElement;
-    const related=state.catalog.filter(y=>y.kind==='Series'&&y.title===x.title&&y.category===x.category)
-       .sort((a,b)=>(a.season||0)-(b.season||0)||(a.episode||0)-(b.episode||0));
-    $('title').textContent=x.title;
-    $('info').textContent=[x.category,x.kind,x.year,x.size,x.modified?'Modified: '+x.modified:''].filter(Boolean).join(' · ');
-    const first=related[0]||x;
-    $('play').onclick=()=>nativeCall('play',first.id);
-    $('external').onclick=()=>nativeCall('external',first.id);
-    $('favorite').textContent=x.favorite?'♥ Remove Favorite':'♡ Add Favorite';
-    $('favorite').onclick=()=>{nativeCall('favorite',x.id,!x.favorite);x.favorite=!x.favorite;$('favorite').textContent=x.favorite?'♥ Remove Favorite':'♡ Add Favorite'};
-    $('episodes').replaceChildren();$('episodeHeading').style.display=x.kind==='Series'?'block':'none';
-    if(x.kind==='Series')related.slice(0,200).forEach(y=>{
-      const line=elem('div','episode');
-      line.append(elem('span','', 'Season '+(y.season||'?')+' · Episode '+(y.episode||'?')+' · '+y.size));
-      const p=elem('button','','▶ Play');p.onclick=()=>nativeCall('play',y.id);line.append(p);$('episodes').append(line)
-    });
-    $('detail').classList.add('open');$('back').focus();
-  }
-  function back(){
-    if($('detail').classList.contains('open')){
-      $('detail').classList.remove('open');if(lastCard)lastCard.focus();state.detail=null;return;
-    }
-    state.tab='Home';state.offset=0;state.query='';$('search').value='';draw();document.querySelector('[data-tab="Home"]').focus()
-  }
-  window.tvBack=back;
-  document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;state.offset=0;draw()});
-  $('search').oninput=e=>{state.query=e.target.value;state.offset=0;draw()};
-  $('scan').onclick=()=>nativeCall('refresh');$('back').onclick=back;
-  document.addEventListener('keydown',e=>{
-    if(e.key==='Escape'||(e.key==='Backspace'&&document.activeElement.tagName!=='INPUT')){e.preventDefault();back();return}
-    if(!['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.key))return;
-    const sel=$('detail').classList.contains('open')?'#detail button:not(:disabled)':'header button:not(:disabled), header input, main button:not(:disabled)';
-    const nodes=[...document.querySelectorAll(sel)].filter(n=>n.getClientRects().length>0);
-    const current=document.activeElement;if(!current||!nodes.includes(current))return;
-    const r=current.getBoundingClientRect();const x=r.x+r.width/2,y=r.y+r.height/2;
-    const horizontal=e.key==='ArrowRight'||e.key==='ArrowLeft';
-    const candidates=nodes.filter(n=>n!==current).map(n=>{
-      const b=n.getBoundingClientRect();const dx=b.x+b.width/2-x,dy=b.y+b.height/2-y;
-      const axis=e.key==='ArrowRight'?dx:e.key==='ArrowLeft'?-dx:e.key==='ArrowDown'?dy:-dy;
-      const across=horizontal?Math.abs(dy):Math.abs(dx);
-      return {n,axis,score:axis+2.8*across};
-    }).filter(v=>v.axis>6).sort((a,b)=>a.score-b.score);
-    if(candidates[0]){e.preventDefault();candidates[0].n.focus();candidates[0].n.scrollIntoView({block:'nearest',inline:'nearest'})}
-  });
-  draw();setTimeout(()=>nativeCall('ready'),400);
+ }
+ if(prior){const found=[...document.querySelectorAll(".card")].find(e=>e.dataset.id===prior);if(found)found.focus({preventScroll:true})}
+}
+function fetchBrowse(){
+ st.request++;
+ nativeCall("browse",st.tab,st.category,st.year,st.query,st.sort,st.offset,st.request);
+}
+function refresh(){
+ if(st.tab==="Home"&&!st.query&&!st.category&&!st.year)nativeCall("home");
+ else fetchBrowse()
+}
+function setTab(tab){
+ st.tab=tab;st.category="";st.year="";st.offset=0;st.query="";$("search").value="";
+ nativeCall("categories",tab);
+ if(tab==="Home")nativeCall("home");else fetchBrowse();
+ display()
+}
+function renderOptions(){
+ const cat=$("category"),year=$("year");
+ cat.replaceChildren(new Option("All Categories",""));
+ st.categories.forEach(c=>cat.add(new Option(c.name+" ("+c.count+")",c.name)));
+ cat.value=st.categories.some(c=>c.name===st.category)?st.category:"";st.category=cat.value;
+ year.replaceChildren(new Option("All Years",""));
+ st.years.forEach(y=>year.add(new Option(y,y)));
+ year.value=st.years.includes(st.year)?st.year:"";st.year=year.value;
+ $("sort").value=st.sort;
+ const quick=$("categoryShortcuts");quick.replaceChildren();
+ st.categories.slice(0,19).forEach(c=>{
+  const b=el("button","",c.name+" · "+c.count);
+  b.onclick=()=>{st.tab=c.name.toLowerCase().includes("series")?"Series":"Movies";st.category=c.name;st.query="";st.offset=0;$("search").value="";nativeCall("categories",st.tab);fetchBrowse();display()};
+  quick.append(b)
+ })
+}
+function detail(item){
+ st.detail=item;restoreFocus=document.activeElement;
+ $("detailTitle").textContent=item.title;
+ $("detailInfo").textContent=[item.kind,item.category,item.year,item.genre,item.quality,item.size].filter(Boolean).join(" · ");
+ $("play").onclick=()=>nativeCall("play",item.id);
+ $("external").onclick=()=>nativeCall("external",item.id);
+ $("fav").textContent=item.favorite?"♥ Remove Favorite":"♡ Favorite";
+ $("fav").onclick=()=>{nativeCall("favorite",item.id,!item.favorite);item.favorite=!item.favorite;$("fav").textContent=item.favorite?"♥ Remove Favorite":"♡ Favorite"};
+ $("episodes").replaceChildren();st.episodeOffset=0;st.episodeTotal=0;
+ $("episodeTitle").style.display=item.kind==="Series"?"block":"none";
+ $("moreEpisodes").style.display="none";
+ if(item.kind==="Series")nativeCall("details",item.id,0);
+ $("detail").classList.add("open");$("back").focus()
+}
+function appendEpisodes(payload){
+ if(!st.detail||payload.id!==st.detail.id)return;
+ st.episodeTotal=payload.total;st.episodeOffset=payload.offset+payload.episodes.length;
+ payload.episodes.forEach(x=>{
+  const row=el("div","episode");
+  row.append(el("span","",(x.season?"S"+x.season+" · ":"")+(x.episode?"Episode "+x.episode:"Episode")+" · "+(x.quality||"")+" "+x.size));
+  const b=el("button","","▶ Play");b.onclick=()=>nativeCall("play",x.id);
+  row.append(b);$("episodes").append(row)
+ });
+ $("moreEpisodes").style.display=st.episodeOffset<st.episodeTotal?"block":"none";
+}
+function closeDetail(){
+ if(!$("detail").classList.contains("open"))return false;
+ $("detail").classList.remove("open");st.detail=null;
+ if(restoreFocus?.isConnected)restoreFocus.focus();else document.querySelector(".card")?.focus();
+ return true
+}
+window.tvBack=()=>{if(!closeDetail()){setTab("Home");document.querySelector('[data-tab="Home"]').focus()}};
+window.fromNative=(type,data)=>{
+ try{
+  if(type==="home"){st.groups=JSON.parse(data);if(st.tab==="Home"&&!st.query)display()}
+  else if(type==="categories"){
+   const c=JSON.parse(data);
+   if(st.tab===c.tab || st.tab==="Home"){st.categories=c.categories||[];st.years=c.years||[];renderOptions()}
+  }else if(type==="browse"){
+   const p=JSON.parse(data);
+   if(p.requestId!==st.request)return;
+   st.items=p.items||[];st.total=p.total||0;display();
+  }else if(type==="details")appendEpisodes(JSON.parse(data));
+  else if(type==="favorite"){
+   const f=JSON.parse(data);st.items.forEach(x=>{if(x.id===f.id)x.favorite=f.value});
+   st.groups.forEach(g=>(g.items||[]).forEach(x=>{if(x.id===f.id)x.favorite=f.value}));
+  }else if(type==="progress"){
+   const p=JSON.parse(data);scanning=!!p.scanning;
+   $("progress").classList.add("visible");
+   $("progress").textContent=(p.message||"")+"  ·  Indexed "+p.indexed+" files  ·  "+p.done+" folders scanned  ·  "+p.pending+" remaining  ·  "+p.failed+" unavailable";
+   $("stop").style.display=scanning?"inline-block":"none";
+  }else if(type==="status"||type==="complete")$("status").textContent=data;
+  else if(type==="playback")refresh();
+ }catch(e){$("status").textContent="Library display error: "+e.message}
+};
+document.querySelectorAll("nav [data-tab]").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+$("category").onchange=e=>{st.category=e.target.value;st.offset=0;fetchBrowse()};
+$("year").onchange=e=>{st.year=e.target.value;st.offset=0;fetchBrowse()};
+$("sort").onchange=e=>{st.sort=e.target.value;st.offset=0;fetchBrowse()};
+$("reset").onclick=()=>{st.category="";st.year="";st.sort="new";st.offset=0;renderOptions();fetchBrowse()};
+$("search").oninput=e=>{
+ st.query=e.target.value;st.offset=0;
+ if(debounce)clearTimeout(debounce);
+ debounce=setTimeout(()=>{if(st.query){$("toolbar").style.display="flex";fetchBrowse()}else refresh()},280);
+};
+$("scan").onclick=()=>{nativeCall("refresh");$("status").textContent="Scanning all reachable folders. You can continue browsing."};
+$("stop").onclick=()=>nativeCall("stopScan");
+$("back").onclick=closeDetail;
+$("moreEpisodes").onclick=()=>{if(st.detail)nativeCall("details",st.detail.id,st.episodeOffset)};
+document.addEventListener("keydown",e=>{
+ if(e.key==="Escape"||(e.key==="Backspace"&&document.activeElement.tagName!=="INPUT")){e.preventDefault();window.tvBack();return}
+ if(!["ArrowRight","ArrowLeft","ArrowUp","ArrowDown"].includes(e.key))return;
+ const a=document.activeElement;
+ if(a.tagName==="SELECT"||a.tagName==="INPUT")return;
+ const inside=$("detail").classList.contains("open");
+ const nodes=[...document.querySelectorAll(inside?"#detail button:not(:disabled)":"header button:not(:disabled),header input,main button:not(:disabled),main select")].filter(n=>n.getClientRects().length);
+ if(!nodes.includes(a))return;
+ const r=a.getBoundingClientRect(),x=r.x+r.width/2,y=r.y+r.height/2,h=e.key==="ArrowLeft"||e.key==="ArrowRight";
+ const candidates=nodes.filter(n=>n!==a).map(n=>{
+  const b=n.getBoundingClientRect(),dx=b.x+b.width/2-x,dy=b.y+b.height/2-y;
+  const along=e.key==="ArrowRight"?dx:e.key==="ArrowLeft"?-dx:e.key==="ArrowDown"?dy:-dy;
+  return{n,along,score:along+(h?Math.abs(dy):Math.abs(dx))*2.8}
+ }).filter(x=>x.along>6).sort((a,b)=>a.score-b.score);
+ if(candidates[0]){e.preventDefault();candidates[0].n.focus();candidates[0].n.scrollIntoView({block:"nearest",inline:"nearest"})}
+});
+display();setTimeout(()=>nativeCall("ready"),300);
 })();
-</script></body></html>
+</script>
+</body></html>
