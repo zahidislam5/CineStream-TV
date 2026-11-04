@@ -339,10 +339,14 @@ class MainActivity:Activity(){
                     sendCategories("Home")
                     sendHome()
                 }
+            }catch(e:kotlinx.coroutines.CancellationException){
+                send("status","Scan paused. Progress saved; press Scan All to continue.")
+                throw e
             }catch(e:Exception){
                 Log.e("ZAHRUS-TV","Scan interrupted",e)
-                send("status","Scan paused due to an error. Press Scan again to resume.")
+                send("status","Scan paused due to an error. Press Scan All to resume.")
             }finally{
+                scanJob=null
                 val stats=runCatching{withContext(Dispatchers.IO){store.scanStats()}}.getOrNull()
                 if(stats!=null)sendProgress(stats,"Scan stopped; progress saved")
             }
@@ -366,7 +370,7 @@ class MainActivity:Activity(){
         container.addView(playerView,FrameLayout.LayoutParams(-1,-1))
         val exit=Button(this).apply{
             text="Exit Fullscreen"
-            setOnClickListener{closePlayer();send("playback",id)}
+            setOnClickListener{closePlayer();send("playback",item.id)}
         }
         container.addView(exit,FrameLayout.LayoutParams(-2,-2,Gravity.TOP or Gravity.END))
         exo.addListener(object:Player.Listener{
