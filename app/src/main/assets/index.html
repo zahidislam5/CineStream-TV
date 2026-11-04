@@ -92,6 +92,16 @@ h2{font-size:25px;margin:30px 0 15px}
 </div>
 <script>
 (()=>{
+// Android TV WebView versions before Chromium 86 do not support replaceChildren.
+if(typeof Element!=="undefined" && !Element.prototype.replaceChildren){
+  Element.prototype.replaceChildren=function(){
+    while(this.firstChild)this.removeChild(this.firstChild);
+    for(let i=0;i<arguments.length;i++){
+      const child=arguments[i];
+      this.appendChild(typeof child==="string"?document.createTextNode(child):child);
+    }
+  };
+}
 const $=id=>document.getElementById(id);
 const st={tab:"Home",category:"",year:"",sort:"new",query:"",offset:0,total:0,request:0,items:[],groups:[],categories:[],years:[],detail:null,episodeOffset:0,episodeTotal:0};
 let debounce=null,restoreFocus=null,scanning=false;
