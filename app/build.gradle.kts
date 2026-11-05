@@ -6,7 +6,7 @@ android {
     namespace = "com.cinestream.tv"
     compileSdk = 35
     defaultConfig {
-        applicationId = "com.cinestream.tv"
+        applicationId = "com.zahrus.tv"
         minSdk = 26
         targetSdk = 35
         versionCode = 9

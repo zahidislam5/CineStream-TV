@@ -30,3 +30,6 @@ The preloaded source data are user-provided and must remain in a private reposit
 ## Testing
 
 Build and an Android emulator startup smoke test can validate compiler/runtime startup, but only the user's ISP-connected Google TV can validate private link playback and poster retrieval.
+## Side-by-side install — safer for existing users
+
+This v0.7 application uses the new package ID `com.zahrus.tv`. It installs **beside** the older working `com.cinestream.tv` application, so there is no need to uninstall or erase the old application's favorites or data. Because Android separates the two apps' private storage, favorites/resume history from the old app are not automatically transferred. The new app starts with a fully preloaded catalog; the old app remains installed for fallback.
