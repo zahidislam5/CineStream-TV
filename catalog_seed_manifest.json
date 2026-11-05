@@ -1,0 +1,13 @@
+{
+  "seed_version": "2026-11-05-exporter-1.0.0",
+  "seed_file": "app/src/main/assets/catalog_seed.db.gz",
+  "video_files": 203724,
+  "movie_files": 34331,
+  "series_episodes": 169393,
+  "categories": 14,
+  "completed_folders": 49483,
+  "failed_folders": 10,
+  "preload_sqlite_bytes": 165203968,
+  "preload_gzip_bytes": 20503901,
+  "gzip_sha256": "526a9fad216cca49ecec9d61568491027347ffe38932d68432a66924ead77339"
+}

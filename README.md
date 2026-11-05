@@ -1,34 +1,32 @@
-# ZAHRUS TV v0.6.0 — Complete ISP library indexing
+# ZAHRUS TV v0.7 — Preloaded ISP Movie Catalog
 
-A lightweight Google TV / Android TV app with simple poster cards, local SQLite catalog, Media3 video player, movie/series categories and library-wide search.
+This development branch adds support for a **prebundled catalog** from the owner's existing ZAHRUS TV exporter. The currently working v0.6 branch remains unchanged.
 
-## What's new
+## The user's catalog
 
-- **Scan All** continues through the available Movies & TV/Web Series category folder trees, instead of stopping after 16 folders per source.
-- The scanner uses a persistent **crawl_queue** inside the existing SQLite database; it records completed, pending and unavailable directories.
-- It scans one directory at a time, throttles requests, keeps the UI responsive, and continues after interruption by selecting **Scan All** again.
-- Videos are indexed by stable URL ID. Existing catalog and favorites are preserved by a v2 → v3 database migration.
-- Search and category filters query the **entire SQLite catalog**, not a limited selection of 1,800 items.
-- Movie & Series category chooser, release-year filter, alphabetical and newest/oldest sorting.
-- Home screen retains the simple grid layout and displays compact category sections; no Netflix-style UI.
-- Series detail pages load episode results in batches of 100.
-- Existing lightweight poster proxy limits concurrent image requests and shrinks image dimensions for low-RAM TVs.
+- 203,724 video files; 34,331 movie files; 169,393 TV/series episode files.
+- 14 media categories (no Documentaries, Games, Software, or PC files).
+- 49,483 fully crawled folders; 10 folder timeouts still unresolved.
+- 149,990 video rows with a poster URL. Poster images themselves are not bundled.
+- Indexed at 2026-11-04 19:30 UTC. URL reachability must be checked on the ISP network.
 
-## How to use
+## How to complete this branch
 
-1. Connect Google TV to the same ISP network as the private 172.16.50.x servers.
-2. Open ZAHRUS TV and select **Scan All** once. Keep the application open during the first full scan; it can take a while on a large library.
-3. Watch progress: indexed files, scanned folders, remaining folders and unreachable folders.
-4. If you must stop, choose **Pause Scan**. Selecting Scan All later resumes the recorded pending folders.
-5. When the scan finishes, choose Movies or Series, then Category and Year; Search finds results throughout the indexed database.
-6. If any directory is unreachable, press Scan All again to retry the failed paths. If all previously queued paths have completed, the next Scan All starts a fresh catalog crawl to discover new content.
+1. Upload the file `catalog_seed.db.gz` to **`app/src/main/assets/catalog_seed.db.gz`** in this GitHub branch using **Code → Add file → Upload files**. The file is ~20.5 MB (within GitHub's 25 MB browser-upload limit).
+2. The push triggers **Build ZAHRUS TV Debug APK** for this branch. The workflow checks the SHA-256 hash of the seed and compiles the app.
+3. Download the APK Artifact from GitHub Actions and install on Google TV. The first launch will unpack the seed in app-private storage; later starts are fast and never require a full scan.
+4. Use **Update Library** only when new content has been uploaded. It performs a resumable scan of supported categories. The 10 timed-out folders can be retried.
 
-## Important boundaries
+Seed SHA-256: `526a9fad216cca49ecec9d61568491027347ffe38932d68432a66924ead77339`
 
-- The scanner follows only the fifteen preconfigured media roots and their reachable links. It does not browse Games/Software or unrelated servers.
-- A server that is offline, inaccessible, or does not expose files through its directory HTML cannot be exhaustively indexed. Inspect the unavailable count for such cases.
-- The index runs while the application is open. It is not a perpetual background server-side crawler. It does not download the movie files.
-- GitHub Actions can compile and emulator-test the app, but cannot test private ISP media URLs or actual TV playback.
-- Installing debug APKs over an older APK may fail if GitHub Actions used a different signing certificate. Uninstalling clears on-device app data.
+### How it works
 
-Repository: https://github.com/zahidislam5/CineStream-TV
+On a new install the bundled compressed SQLite database is copied directly to the app's private database directory and opened by the `LibraryStore` v4 helper. On an existing install the seed is merged using `INSERT OR IGNORE` into the existing database, retaining user-scanned items, local favorites and saved resume positions. A `seed_meta` marker prevents repeated imports. No custom server, PC process, or manual scan is needed **after the one-time first-launch import**.
+
+The APK contains movie and series metadata, video URLs and poster URLs. Poster images and videos still require access to the ISP's private network. The first launch unpacks ~165 MB, so ensure ample free storage; backup existing app data before changing signing certificates. Debug APK signing may differ between GitHub Actions runs.
+
+The preloaded source data are user-provided and must remain in a private repository. The scanner has no source for Documents/Games/Software and does not traverse unrelated servers.
+
+## Testing
+
+Build and an Android emulator startup smoke test can validate compiler/runtime startup, but only the user's ISP-connected Google TV can validate private link playback and poster retrieval.

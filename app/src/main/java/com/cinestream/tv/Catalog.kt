@@ -30,8 +30,7 @@ object Sources {
         Source("3D Movies","http://172.16.50.7/DHAKA-FLIX-7/3D%20Movies/","Movie"),
         Source("TV & Web Series","http://172.16.50.12/DHAKA-FLIX-12/TV-WEB-Series/","Series"),
         Source("Korean Series","http://172.16.50.14/DHAKA-FLIX-14/KOREAN%20TV%20%26%20WEB%20Series/","Series"),
-        Source("Anime Series","http://172.16.50.10/DHAKA-FLIX-10/Anime%20%26%20Cartoon%20TV%20Series/","Series"),
-        Source("Documentaries","http://172.16.50.10/DHAKA-FLIX-10/Documentary/","Movie")
+        Source("Anime Series","http://172.16.50.10/DHAKA-FLIX-10/Anime%20%26%20Cartoon%20TV%20Series/","Series")
     )
 }
 data class MediaEntry(

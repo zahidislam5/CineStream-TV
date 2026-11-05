@@ -66,14 +66,14 @@ h2{font-size:25px;margin:30px 0 15px}
 <button data-tab="Favorites">Favorites</button>
 </nav>
 <input id="search" placeholder="Search title, year, episode…" aria-label="Search entire library" autocomplete="off">
-<button id="scan">↻ Scan All</button>
+<button id="scan">↻ Update Library</button>
 <button id="stop">Pause Scan</button>
 </header>
-<div id="status">Loading the ZAHRUS TV library. Games and Software are excluded.</div>
+<div id="status">Loading your preloaded movie catalog. Games, Software and Documentaries are excluded.</div>
 <div id="progress"></div>
 <main>
 <div class="hero"><h1>Movies and Series. One screen.</h1>
-<p>Browse your ISP movie library with the TV remote. One complete scan visits every reachable Movie and Series folder, and saves progress so you can resume later.</p></div>
+<p>Browse your ISP movie library with the TV remote. Your complete preloaded catalog opens from this TV. Select Update Library only when new movies or series are added to the server.</p></div>
 <div id="categoryShortcuts" aria-label="Quick categories"></div>
 <div id="toolbar" class="toolbar" style="display:none">
 <select id="category" aria-label="Choose category"><option value="">All Categories</option></select>
@@ -139,7 +139,7 @@ function display(){
  const home=st.tab==="Home"&&!st.query&&!st.category&&!st.year;
  $("toolbar").style.display=home?"none":"flex";
  if(home){
-  if(!st.groups.length)$("content").append(el("div","empty","Your library is empty. Connect to the ISP network and choose Scan All."));
+  if(!st.groups.length)$("content").append(el("div","empty","No preloaded library found in this build. Confirm that catalog_seed.db.gz is bundled or select Update Library."));
   st.groups.forEach(g=>{if(g.items?.length)$("content").append(grid(g.title,g.items))});
  }else{
   const top=el("div","",null);top.id="titleBar";

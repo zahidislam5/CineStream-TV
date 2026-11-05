@@ -1,7 +1,7 @@
 name: Build ZAHRUS TV Debug APK
 on:
   push:
-    branches: [main]
+    branches: [main, zahrus-v0.7-preloaded-library]
   workflow_dispatch:
 
 jobs:
@@ -35,6 +35,16 @@ jobs:
           test -n "$SDKMANAGER"
           "$SDKMANAGER" --licenses < <(yes) >/dev/null
           "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Validate optional preloaded catalog
+        shell: bash
+        run: |
+          if [ -f app/src/main/assets/catalog_seed.db.gz ]; then
+            echo "Found preloaded catalog asset"
+            echo "526a9fad216cca49ecec9d61568491027347ffe38932d68432a66924ead77339  app/src/main/assets/catalog_seed.db.gz" | sha256sum -c -
+          else
+            echo "::warning::Preloaded catalog not yet uploaded to this branch; APK builds but contains no seed data."
+          fi
 
       - name: Build debug APK
         id: compile

@@ -13,7 +13,7 @@ data class BrowseResult(val total:Int,val results:List<MediaEntry>)
 data class CategoryCount(val name:String,val count:Int)
 data class ScanStats(val pending:Int,val done:Int,val failed:Int,val files:Int)
 
-class LibraryStore(ctx:Context):SQLiteOpenHelper(ctx,"cinestream.db",null,3){
+class LibraryStore(ctx:Context):SQLiteOpenHelper(ctx,"cinestream.db",null,4){
     private val fields="id,title,url,category,kind,modified,size,poster,season,episode,year,genre,quality"
 
     override fun onCreate(db:SQLiteDatabase){
@@ -25,6 +25,7 @@ class LibraryStore(ctx:Context):SQLiteOpenHelper(ctx,"cinestream.db",null,3){
         db.execSQL("CREATE TABLE IF NOT EXISTS crawl_queue(source TEXT NOT NULL,url TEXT NOT NULL,state INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(source,url))")
         db.execSQL("CREATE INDEX IF NOT EXISTS ix_crawl_pending ON crawl_queue(source,state)")
         db.execSQL("CREATE TABLE IF NOT EXISTS favorites(id TEXT PRIMARY KEY)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS seed_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL)")
         db.execSQL("CREATE INDEX IF NOT EXISTS ix_video_category ON videos(kind,category)")
         db.execSQL("CREATE INDEX IF NOT EXISTS ix_video_title ON videos(title COLLATE NOCASE)")
     }
@@ -39,7 +40,41 @@ class LibraryStore(ctx:Context):SQLiteOpenHelper(ctx,"cinestream.db",null,3){
             if("quality" !in columns)db.execSQL("ALTER TABLE videos ADD COLUMN quality TEXT")
         }
         if(from<3)makeTables(db)
+        if(from<4){
+            db.execSQL("CREATE TABLE IF NOT EXISTS seed_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL)")
+            db.execSQL("DELETE FROM videos WHERE category=\'Documentaries\'")
+            db.execSQL("DELETE FROM crawl_queue WHERE source=\'Documentaries\'")
+        }
     }
+    fun hasSeed(version:String):Boolean {
+        return readableDatabase.rawQuery(
+            "SELECT 1 FROM seed_meta WHERE key='seed_version' AND value=? LIMIT 1",
+            arrayOf(version)).use { it.moveToFirst() }
+    }
+
+    /** Merge only missing video URLs: user-scanned newer data takes precedence. */
+    fun mergeSeed(seed:java.io.File,version:String){
+        if(hasSeed(version))return
+        val db=writableDatabase
+        db.execSQL("ATTACH DATABASE ? AS preloaded",arrayOf(seed.absolutePath))
+        try{
+            db.beginTransaction()
+            try{
+                db.execSQL("INSERT OR IGNORE INTO videos("+fields+") SELECT "+
+                    fields+" FROM preloaded.videos WHERE kind IN ('Movie','Series') "+
+                    "AND category!='Documentaries'")
+                db.execSQL("INSERT OR IGNORE INTO crawl_queue(source,url,state) "+
+                    "SELECT source,url,state FROM preloaded.crawl_queue "+
+                    "WHERE source!='Documentaries'")
+                db.execSQL("DELETE FROM videos WHERE category='Documentaries'")
+                db.execSQL("DELETE FROM crawl_queue WHERE source='Documentaries'")
+                db.execSQL("INSERT OR REPLACE INTO seed_meta(key,value) VALUES('seed_version',?)",
+                    arrayOf(version))
+                db.setTransactionSuccessful()
+            }finally{db.endTransaction()}
+        }finally{db.execSQL("DETACH DATABASE preloaded")}
+    }
+
     private fun long(sql:String,args:Array<String> = emptyArray()):Long =
         DatabaseUtils.longForQuery(readableDatabase,sql,args)
 
@@ -149,13 +184,10 @@ class LibraryStore(ctx:Context):SQLiteOpenHelper(ctx,"cinestream.db",null,3){
         try{
             val pending=DatabaseUtils.longForQuery(db,"SELECT count(*) FROM crawl_queue WHERE state=0",null)
             if(pending>0){db.setTransactionSuccessful();return "Resuming pending directories"}
-            val failures=DatabaseUtils.longForQuery(db,"SELECT count(*) FROM crawl_queue WHERE state=2",null)
-            if(failures>0){
-                db.execSQL("UPDATE crawl_queue SET state=0 WHERE state=2")
-                db.setTransactionSuccessful()
-                return "Retrying previously unreachable directories"
-            }
-            db.execSQL("DELETE FROM crawl_queue")
+            // A deliberate new scan rechecks completed directories for fresh videos.
+            // If interrupted, pending directories remain and the next run resumes.
+            db.execSQL("UPDATE crawl_queue SET state=0 WHERE source!='Documentaries'")
+            db.execSQL("DELETE FROM crawl_queue WHERE source='Documentaries'")
             for(source in Sources.defaults){
                 db.execSQL("INSERT OR IGNORE INTO crawl_queue(source,url,state) VALUES(?,?,0)",
                     arrayOf(source.label,source.url))

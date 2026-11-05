@@ -121,21 +121,31 @@ class MainActivity:Activity(){
         if(initialized||loadJob?.isActive==true)return
         loadJob=scope.launch {
             try{
-                withContext(Dispatchers.IO){
+                send("status","Preparing your preloaded movie library (first launch may take longer)...")
+                val seedMessage=withContext(Dispatchers.IO){
+                    val fresh=PreloadedCatalog.installForFreshApp(this@MainActivity)
                     store=LibraryStore(this@MainActivity)
                     store.writableDatabase
+                    val merged=if(!fresh)PreloadedCatalog.importForExistingApp(this@MainActivity,store) else false
                     store.importFavorites(prefs)
+                    when {
+                        fresh -> "Installed the preloaded catalog"
+                        merged -> "Merged the preloaded catalog with your saved data"
+                        PreloadedCatalog.available(this@MainActivity) -> "Preloaded catalog ready"
+                        else -> "No bundled catalog in this build"
+                    }
                 }
                 initialized=true
                 sendCategories("Home")
                 sendHome()
                 val stats=withContext(Dispatchers.IO){store.scanStats()}
-                send("status",stats.files.toString()+" video files indexed; "+
-                    stats.pending+" folders left to scan. Press Scan to index the complete library.")
-                sendProgress(stats,"Ready")
+                send("status",seedMessage+" — "+stats.files+
+                    " video files. Use Scan All only when you want to find server updates.")
+                sendProgress(stats,"Library ready • "+stats.files+" preloaded video files")
             }catch(e:Exception){
-                Log.e("ZAHRUS-TV","Database unavailable",e)
-                showRecovery("Could not open library database. Existing data was not deleted.")
+                Log.e("ZAHRUS-TV","Preloaded catalog failed",e)
+                showRecovery("Could not prepare preloaded library: "+
+                    (e.message?:"Unknown error")+". Existing user data was not deleted.")
             }
         }
     }
