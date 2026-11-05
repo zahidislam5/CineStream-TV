@@ -46,6 +46,21 @@ jobs:
             echo "::warning::Preloaded catalog not yet uploaded to this branch; APK builds but contains no seed data."
           fi
 
+      - name: Package Android APK signing tools
+        shell: bash
+        run: |
+          mkdir -p signing-tools
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" signing-tools/apksigner.jar
+          cp "$ANDROID_HOME/build-tools/35.0.0/zipalign" signing-tools/zipalign
+          chmod +x signing-tools/zipalign
+
+      - name: Upload Android APK signing tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZAHRUS-TV-signing-tools
+          path: signing-tools/
+          if-no-files-found: error
+
       - name: Build debug APK
         id: compile
         continue-on-error: true
